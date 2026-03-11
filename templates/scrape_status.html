@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6 col-xl-5">
+        <div class="card">
+            <div class="card-header">
+                <h3>Scraping Status</h3>
+            </div>
+            <div class="card-body text-center">
+                <h4 class="mb-3">Status: 
+                    {% if status == 'running' %}
+                        <span class="badge bg-primary">Running</span>
+                    {% elif status == 'completed' %}
+                        <span class="badge bg-success">Completed</span>
+                    {% elif status == 'stopped' %}
+                        <span class="badge bg-warning text-dark">Stopped</span>
+                    {% elif status == 'failed' or status == 'error' %}
+                        <span class="badge bg-danger">Failed</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ status }}</span>
+                    {% endif %}
+                </h4>
+                
+                <p class="lead">{{ message }}</p>
+                
+                {% if project_dir %}
+                    <p class="text-muted">Output Directory: <code>{{ project_dir }}</code></p>
+                {% endif %}
+
+                {% if status == 'running' %}
+                    <form action="/scrape/stop" method="post" class="mt-4">
+                        <button type="submit" class="btn btn-danger btn-lg">🛑 Stop Scraping</button>
+                    </form>
+                    <div class="mt-3">
+                        <small class="text-muted">Page does not auto-refresh. <a href="/scrape/status">Click here to refresh status</a>.</small>
+                    </div>
+                {% else %}
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="/analyze" class="btn btn-success">Go to Analysis</a>
+                        <a href="/scrape" class="btn btn-secondary">Scrape Another</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

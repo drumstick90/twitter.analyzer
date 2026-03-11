@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3>Scraping Result</h3>
+            </div>
+            <div class="card-body">
+                {% if success %}
+                    <div class="alert alert-success" role="alert">
+                        <h4 class="alert-heading">Success!</h4>
+                        <p>{{ message }}</p>
+                        <hr>
+                        <p class="mb-0">Data saved to: <code>{{ project_dir }}</code></p>
+                    </div>
+                {% else %}
+                    <div class="alert alert-danger" role="alert">
+                        <h4 class="alert-heading">Failed!</h4>
+                        <p>{{ message }}</p>
+                    </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 mt-4">
+                    <a href="/analyze" class="btn btn-success">Go to Analysis</a>
+                    <a href="/scrape" class="btn btn-secondary">Scrape Another</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

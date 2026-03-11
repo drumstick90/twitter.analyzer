@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-9">
+        <div class="card">
+            <div class="card-header">
+                <h3>24h Scrape Status</h3>
+            </div>
+            <div class="card-body text-center">
+                <h4 class="mb-3">Status:
+                    {% if status == 'running' %}
+                        <span class="badge bg-primary">Running</span>
+                    {% elif status == 'completed' %}
+                        <span class="badge bg-success">Completed</span>
+                    {% elif status == 'stopped' %}
+                        <span class="badge bg-warning text-dark">Stopped</span>
+                    {% elif status == 'failed' or status == 'error' %}
+                        <span class="badge bg-danger">Failed</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ status }}</span>
+                    {% endif %}
+                </h4>
+
+                <p class="lead">{{ message }}</p>
+
+                {% if usernames and usernames|length > 0 and status == 'running' %}
+                    <p class="text-muted">Current: {{ current_index + 1 }} of {{ usernames|length }} — @{{ usernames[current_index] if current_index < usernames|length else '' }}</p>
+                {% endif %}
+
+                {% if results and results|length > 0 %}
+                    <div class="mt-4 text-start">
+                        <h5>Completed users</h5>
+                        <ul class="list-group list-group-flush">
+                            {% for r in results %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>@{{ r.username }}</span>
+                                <span>
+                                    {% if r.status == 'completed' %}
+                                        <span class="badge bg-success">{{ r.tweet_count }} tweets</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{{ r.error|default('Error') }}</span>
+                                    {% endif %}
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+
+                {% if project_dirs and project_dirs|length > 0 %}
+                    <p class="mt-3 text-muted small">Output: {% for d in project_dirs %}<code>{{ d }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+                {% endif %}
+
+                {% if status == 'running' %}
+                    <form action="/scrape-24h/stop" method="post" class="mt-4">
+                        <button type="submit" class="btn btn-danger btn-lg">Stop Scraping</button>
+                    </form>
+                {% else %}
+                    <div class="d-grid gap-2 mt-4">
+                        <a href="/analyze" class="btn btn-success">Go to Analysis</a>
+                        <a href="/scrape-24h" class="btn btn-secondary">Scrape Another</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Live log</h5>
+                {% if status == 'running' %}
+                <span class="badge bg-success">auto-refreshing</span>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                <pre id="log-output" class="mb-0 p-3 bg-dark text-light" style="max-height: 400px; overflow-y: auto; font-size: 0.85rem; line-height: 1.4;">{% for line in logs|default([]) %}{{ line }}{{ '\n' }}{% endfor %}</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if status == 'running' %}
+<script>
+(function() {
+    const logEl = document.getElementById('log-output');
+    function poll() {
+        fetch('/scrape-24h/status/logs')
+            .then(r => r.json())
+            .then(data => {
+                logEl.textContent = data.logs.join('\n');
+                logEl.scrollTop = logEl.scrollHeight;
+                if (data.status === 'running') {
+                    setTimeout(poll, 2000);
+                } else {
+                    window.location.reload();
+                }
+            })
+            .catch(() => setTimeout(poll, 3000));
+    }
+    setTimeout(poll, 2000);
+})();
+</script>
+{% endif %}
+{% endblock %}

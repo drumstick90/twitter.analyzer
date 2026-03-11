@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2>Analysis Results</h2>
+            <a href="/analyze" class="btn btn-outline-secondary">New Analysis</a>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <strong>{{ analysis_type|title }} Analysis</strong> for <code>{{ dataset }}</code>
+            </div>
+            <div class="card-body text-center">
+                {% if error_message %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ error_message }}
+                    </div>
+                {% elif plot_image %}
+                    <img src="data:image/png;base64,{{ plot_image }}" class="img-fluid" alt="Analysis Plot">
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        No visualization generated.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

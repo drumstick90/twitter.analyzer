@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="p-5 mb-4 bg-light rounded-3">
+    <div class="container-fluid py-5">
+        <h1 class="display-5 fw-bold">Twitter Analyzer</h1>
+        <p class="col-md-8 fs-4">A powerful tool to scrape and analyze Twitter activity, growth patterns, and engagement metrics.</p>
+        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+            <a href="/scrape" class="btn btn-primary btn-lg px-4 me-md-2">Start Scraping</a>
+            <a href="/analyze" class="btn btn-outline-secondary btn-lg px-4">View Analysis</a>
+        </div>
+    </div>
+</div>
+
+<div class="row align-items-md-stretch">
+    <div class="col-md-6">
+        <div class="h-100 p-5 text-white bg-dark rounded-3">
+            <h2>Scrape Data</h2>
+            <p>Download tweets from any public profile using the Twitter Advanced Search API. Filter by year or date range.</p>
+            <a href="/scrape" class="btn btn-outline-light" type="button">Go to Scraper</a>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="h-100 p-5 bg-light border rounded-3">
+            <h2>Analyze Trends</h2>
+            <p>Visualize growth escalation, hourly activity heatmaps, and daily likes progression from your downloaded datasets.</p>
+            <a href="/analyze" class="btn btn-outline-secondary" type="button">Go to Analysis</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

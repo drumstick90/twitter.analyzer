@@ -1,0 +1,15 @@
+---
+description: Use Python 3.11 for this project
+alwaysApply: true
+---
+
+# Python Version
+
+This project uses **Python 3.11**. Always run Python commands with `python3.11`:
+
+```bash
+python3.11 -m agenti.cli run --dataset datasets/24h_accrued
+python3.11 app.py
+```
+
+Do not use `python`, `python3`, or other versions.
