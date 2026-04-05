@@ -1,0 +1,12 @@
+{
+  "usernames": [
+    "clkleinmonaco",
+    "KobeissiLetter",
+    "Fongern_FX",
+    "DeepDishEnjoyer",
+    "nntaleb",
+    "INArteCarloDoss"
+  ],
+  "model": "auto",
+  "dataset_path": "datasets/24h_accrued"
+}

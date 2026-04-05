@@ -1,9 +1,8 @@
-import calendar
 import requests
 import json
 import os
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 class ScraperState:
     def __init__(self):
@@ -18,118 +17,134 @@ class ScraperState:
 # Global state
 scraper_state = ScraperState()
 
-
-def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_prefix):
+def scrape_user_tweets_by_year(username, year, api_key, project_dir):
     """
-    Run one advanced-search query with cursor pagination.
-
-    Saves pages as {file_stem_prefix}_page_{NNN}.json under project_dir.
-
-    Returns (total_tweets_this_query, pages_this_query, success).
+    Scrape tweets for a specific user and year using Twitter Advanced Search API.
     """
+    # Reset stop state at start
+    scraper_state.reset()
+    
+    print(f"\n{'='*60}")
+    print(f"SCRAPING TWEETS FOR @{username} - YEAR {year}")
+    print(f"{'='*60}")
+    print(f"Output directory: {project_dir}")
+    
+    # Twitter Advanced Search API endpoint
     url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
     headers = {"X-API-Key": api_key}
+    
+    # Advanced search query for specific year
+    start_date = f"{year}-01-01_00:00:00_UTC"
+    end_date = f"{year}-12-31_23:59:59_UTC"
+    search_query = f"from:{username} since:{start_date} until:{end_date}"
     query_type = "Latest"
-
+    
     print(f"Search query: {search_query}")
     print(f"Query type: {query_type}")
-
+    
+    # Pagination variables
     cursor = ""
     has_next_page = True
     page_number = 1
     total_tweets = 0
     total_pages = 0
-    delay_between_requests = 1
+    
+    # Rate limiting
+    delay_between_requests = 1  # seconds
+    
+    # Track consecutive empty pages
     consecutive_empty_pages = 0
     max_consecutive_empty = 3
-
+    
     while has_next_page:
+        # Check for stop signal
         if scraper_state.stop_requested:
             print("\n🛑 SCRAPING STOPPED BY USER")
             return total_tweets, total_pages, False
 
         print(f"\n--- Fetching Page {page_number} ---")
         print(f"Using cursor: '{cursor}'")
-
+        
+        # Parameters for advanced search
         querystring = {
             "query": search_query,
             "queryType": query_type,
-            "cursor": cursor,
+            "cursor": cursor
         }
-
+        
         try:
             response = requests.get(url, headers=headers, params=querystring)
-
+            
+            # Check HTTP status first
             if response.status_code != 200:
                 print(f"❌ HTTP Error {response.status_code}: {response.text}")
                 return total_tweets, total_pages, False
-
+            
             response_data = response.json()
-
-            if "error" in response_data:
+            
+            # Check for API errors
+            if 'error' in response_data:
                 print(f"❌ API Error: {response_data.get('message', 'Unknown error')}")
                 return total_tweets, total_pages, False
-
-            if response_data.get("tweets") is None:
-                print(f"❌ Unexpected response format: {response_data}")
-                return total_tweets, total_pages, False
-
-            tweets_on_page = response_data["tweets"]
-            total_pages += 1
-
-            print(f"📊 Tweets received on this page: {len(tweets_on_page)}")
-
-            if tweets_on_page and len(tweets_on_page) > 0:
-                consecutive_empty_pages = 0
-
-                file_path = os.path.join(
-                    project_dir, f"{file_stem_prefix}_page_{page_number:03d}.json"
-                )
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(tweets_on_page, f, indent=2, ensure_ascii=False)
-
-                print(f"💾 Saved {len(tweets_on_page)} tweets to {file_path}")
-                total_tweets += len(tweets_on_page)
-
-                has_next_page = response_data.get("has_next_page", False)
-                next_cursor = response_data.get("next_cursor", "")
-
-                if next_cursor and next_cursor != cursor:
-                    cursor = next_cursor
-                    print(f"📄 Has next page: {has_next_page}")
-                    print(f"🔗 Next cursor: '{cursor}'")
-                else:
-                    print("🔚 No more pages available (cursor unchanged or empty)")
-                    has_next_page = False
-
-                if has_next_page:
-                    print(
-                        f"⏳ Waiting {delay_between_requests} seconds before next request..."
-                    )
-                    time.sleep(delay_between_requests)
-
-            else:
-                consecutive_empty_pages += 1
-                print(
-                    f"⚠️  Empty page received (consecutive: {consecutive_empty_pages})"
-                )
-
-                if consecutive_empty_pages >= max_consecutive_empty:
-                    print(
-                        f"⚠️  Too many consecutive empty pages ({consecutive_empty_pages}). Stopping."
-                    )
-                    has_next_page = False
-                else:
-                    has_next_page = response_data.get("has_next_page", False)
-                    next_cursor = response_data.get("next_cursor", "")
-
+                
+            elif response_data.get('tweets') is not None:
+                tweets_on_page = response_data['tweets']
+                total_pages += 1
+                
+                print(f"📊 Tweets received on this page: {len(tweets_on_page)}")
+                
+                if tweets_on_page and len(tweets_on_page) > 0:
+                    # Reset consecutive empty pages counter
+                    consecutive_empty_pages = 0
+                    
+                    # Save tweets for this page
+                    file_path = os.path.join(project_dir, f"tweets_{username}_{year}_page_{page_number:03d}.json")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(tweets_on_page, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"💾 Saved {len(tweets_on_page)} tweets to {file_path}")
+                    total_tweets += len(tweets_on_page)
+                    
+                    # Update pagination
+                    has_next_page = response_data.get('has_next_page', False)
+                    next_cursor = response_data.get('next_cursor', "")
+                    
                     if next_cursor and next_cursor != cursor:
                         cursor = next_cursor
                         print(f"📄 Has next page: {has_next_page}")
                         print(f"🔗 Next cursor: '{cursor}'")
                     else:
+                        print("🔚 No more pages available (cursor unchanged or empty)")
                         has_next_page = False
-
+                    
+                    # Add delay to avoid rate limiting
+                    if has_next_page:
+                        print(f"⏳ Waiting {delay_between_requests} seconds before next request...")
+                        time.sleep(delay_between_requests)
+                    
+                else:
+                    # Handle empty page
+                    consecutive_empty_pages += 1
+                    print(f"⚠️  Empty page received (consecutive: {consecutive_empty_pages})")
+                    
+                    if consecutive_empty_pages >= max_consecutive_empty:
+                        print(f"⚠️  Too many consecutive empty pages ({consecutive_empty_pages}). Stopping.")
+                        has_next_page = False
+                    else:
+                        has_next_page = response_data.get('has_next_page', False)
+                        next_cursor = response_data.get('next_cursor', "")
+                        
+                        if next_cursor and next_cursor != cursor:
+                            cursor = next_cursor
+                            print(f"📄 Has next page: {has_next_page}")
+                            print(f"🔗 Next cursor: '{cursor}'")
+                        else:
+                            has_next_page = False
+                    
+            else:
+                print(f"❌ Unexpected response format: {response_data}")
+                break
+                
         except requests.exceptions.RequestException as e:
             print(f"❌ Network/Request Error: {str(e)}")
             return total_tweets, total_pages, False
@@ -140,207 +155,172 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
         except Exception as e:
             print(f"❌ Unexpected error: {str(e)}")
             return total_tweets, total_pages, False
-
+        
         page_number += 1
-
+        
+        # Safety check
         if page_number > 1000:
             print("⚠️  Reached maximum page limit (1000). Stopping for safety.")
             break
-
-    return total_tweets, total_pages, True
-
-
-def _iter_months_inclusive(start_d: date, end_d: date):
-    """Yield (year, month) for each calendar month overlapping [start_d, end_d]."""
-    y, m = start_d.year, start_d.month
-    while (y, m) <= (end_d.year, end_d.month):
-        yield y, m
-        if m == 12:
-            y, m = y + 1, 1
-        else:
-            m += 1
-
-
-def _utc_window_for_month_clipped(year: int, month: int, clip_start: date, clip_end: date):
-    """
-    Return (since_str, until_str) for Twitter advanced search for this month,
-    clipped to [clip_start, clip_end] inclusive. None if no overlap.
-    """
-    first = date(year, month, 1)
-    last_day = calendar.monthrange(year, month)[1]
-    last = date(year, month, last_day)
-    window_start = max(clip_start, first)
-    window_end = min(clip_end, last)
-    if window_start > window_end:
-        return None
-    since_str = f"{window_start.strftime('%Y-%m-%d')}_00:00:00_UTC"
-    until_str = f"{window_end.strftime('%Y-%m-%d')}_23:59:59_UTC"
-    return since_str, until_str
-
-
-def scrape_user_tweets_by_year(username, year, api_key, project_dir):
-    """
-    Scrape tweets for a specific user and year using Twitter Advanced Search API.
-    """
-    scraper_state.reset()
-
-    print(f"\n{'='*60}")
-    print(f"SCRAPING TWEETS FOR @{username} - YEAR {year}")
-    print(f"{'='*60}")
-    print(f"Output directory: {project_dir}")
-
-    start_date = f"{year}-01-01_00:00:00_UTC"
-    end_date = f"{year}-12-31_23:59:59_UTC"
-    search_query = f"from:{username} since:{start_date} until:{end_date}"
-    file_stem_prefix = f"tweets_{username}_{year}"
-
-    total_tweets, total_pages, success = _paginate_advanced_search(
-        api_key, search_query, project_dir, file_stem_prefix
-    )
-
-    print(f"\n✅ YEAR {year} COMPLETED" if success else f"\n⚠️ YEAR {year} ENDED")
+    
+    print(f"\n✅ YEAR {year} COMPLETED")
     print(f"📊 Total tweets saved: {total_tweets}")
     print(f"📄 Total pages processed: {total_pages}")
     print(f"📁 Files saved in: {project_dir}")
-
-    return total_tweets, total_pages, success
-
-
-def scrape_user_tweets_by_year_monthly(username, year, api_key, project_dir):
-    """
-    Scrape one calendar year in 12 monthly queries. Files: tweets_{user}_{year}_{MM}_page_NNN.json
-    Completed months are preserved if a later month fails or the run stops.
-    """
-    scraper_state.reset()
-
-    print(f"\n{'='*60}")
-    print(f"SCRAPING TWEETS FOR @{username} - YEAR {year} (MONTHLY CHUNKS)")
-    print(f"{'='*60}")
-    print(f"Output directory: {project_dir}")
-
-    total_tweets = 0
-    total_pages = 0
-
-    for month in range(1, 13):
-        if scraper_state.stop_requested:
-            print("\n🛑 SCRAPING STOPPED BY USER")
-            print(f"📊 Tweets saved so far: {total_tweets}")
-            return total_tweets, total_pages, False
-
-        last_day = calendar.monthrange(year, month)[1]
-        start_date = f"{year}-{month:02d}-01_00:00:00_UTC"
-        end_date = f"{year}-{month:02d}-{last_day:02d}_23:59:59_UTC"
-        search_query = f"from:{username} since:{start_date} until:{end_date}"
-        file_stem_prefix = f"tweets_{username}_{year}_{month:02d}"
-
-        print(f"\n{'─'*50}")
-        print(f"📅 Month {year}-{month:02d}")
-        print(f"{'─'*50}")
-
-        tw, pg, ok = _paginate_advanced_search(
-            api_key, search_query, project_dir, file_stem_prefix
-        )
-        total_tweets += tw
-        total_pages += pg
-        if not ok:
-            print(f"\n⚠️ Stopped during {year}-{month:02d} (earlier months are already saved).")
-            return total_tweets, total_pages, False
-
-    print(f"\n✅ YEAR {year} (MONTHLY) COMPLETED")
-    print(f"📊 Total tweets saved: {total_tweets}")
-    print(f"📄 Total pages processed: {total_pages}")
-    print(f"📁 Files saved in: {project_dir}")
-
+    
     return total_tweets, total_pages, True
 
 def scrape_user_tweets_by_range(username, start_date, end_date, api_key, project_dir):
     """
     Scrape tweets for a specific user and date interval using Twitter Advanced Search API.
     """
+    # Reset stop state at start
     scraper_state.reset()
-
+    
     print(f"\n{'='*60}")
     print(f"SCRAPING TWEETS FOR @{username} - RANGE {start_date} to {end_date}")
     print(f"{'='*60}")
     print(f"Output directory: {project_dir}")
-
+    
+    # Twitter Advanced Search API endpoint
+    url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
+    headers = {"X-API-Key": api_key}
+    
+    # Advanced search query for date range
     start_date_utc = f"{start_date}_00:00:00_UTC"
     end_date_utc = f"{end_date}_23:59:59_UTC"
     search_query = f"from:{username} since:{start_date_utc} until:{end_date_utc}"
-    file_stem_prefix = f"tweets_{username}_{start_date}_to_{end_date}"
-
-    total_tweets, total_pages, success = _paginate_advanced_search(
-        api_key, search_query, project_dir, file_stem_prefix
-    )
-
-    print(
-        f"\n✅ RANGE {start_date} to {end_date} COMPLETED"
-        if success
-        else f"\n⚠️ RANGE {start_date} to {end_date} ENDED"
-    )
-    print(f"📊 Total tweets saved: {total_tweets}")
-    print(f"📄 Total pages processed: {total_pages}")
-    print(f"📁 Files saved in: {project_dir}")
-
-    return total_tweets, total_pages, success
-
-
-def scrape_user_tweets_by_range_monthly(username, start_date, end_date, api_key, project_dir):
-    """
-    Scrape a date range in monthly queries. Files: tweets_{user}_{year}_{MM}_page_NNN.json
-    """
-    scraper_state.reset()
-
-    start_d = datetime.strptime(start_date, "%Y-%m-%d").date()
-    end_d = datetime.strptime(end_date, "%Y-%m-%d").date()
-    if start_d > end_d:
-        print("Invalid range: start after end.")
-        return 0, 0, False
-
-    print(f"\n{'='*60}")
-    print(
-        f"SCRAPING TWEETS FOR @{username} - RANGE {start_date} to {end_date} (MONTHLY CHUNKS)"
-    )
-    print(f"{'='*60}")
-    print(f"Output directory: {project_dir}")
-
+    query_type = "Latest"
+    
+    print(f"Search query: {search_query}")
+    print(f"Query type: {query_type}")
+    
+    # Pagination variables
+    cursor = ""
+    has_next_page = True
+    page_number = 1
     total_tweets = 0
     total_pages = 0
-
-    for y, m in _iter_months_inclusive(start_d, end_d):
+    
+    # Rate limiting
+    delay_between_requests = 1  # seconds
+    
+    # Track consecutive empty pages
+    consecutive_empty_pages = 0
+    max_consecutive_empty = 3
+    
+    while has_next_page:
+        # Check for stop signal
         if scraper_state.stop_requested:
             print("\n🛑 SCRAPING STOPPED BY USER")
-            print(f"📊 Tweets saved so far: {total_tweets}")
             return total_tweets, total_pages, False
 
-        win = _utc_window_for_month_clipped(y, m, start_d, end_d)
-        if not win:
-            continue
-
-        since_str, until_str = win
-        search_query = f"from:{username} since:{since_str} until:{until_str}"
-        file_stem_prefix = f"tweets_{username}_{y}_{m:02d}"
-
-        print(f"\n{'─'*50}")
-        print(f"📅 Month {y}-{m:02d} ({since_str} … {until_str})")
-        print(f"{'─'*50}")
-
-        tw, pg, ok = _paginate_advanced_search(
-            api_key, search_query, project_dir, file_stem_prefix
-        )
-        total_tweets += tw
-        total_pages += pg
-        if not ok:
-            print(
-                f"\n⚠️ Stopped during {y}-{m:02d} (earlier months are already saved)."
-            )
+        print(f"\n--- Fetching Page {page_number} ---")
+        print(f"Using cursor: '{cursor}'")
+        
+        # Parameters for advanced search
+        querystring = {
+            "query": search_query,
+            "queryType": query_type,
+            "cursor": cursor
+        }
+        
+        try:
+            response = requests.get(url, headers=headers, params=querystring)
+            
+            # Check HTTP status first
+            if response.status_code != 200:
+                print(f"❌ HTTP Error {response.status_code}: {response.text}")
+                return total_tweets, total_pages, False
+            
+            response_data = response.json()
+            
+            # Check for API errors
+            if 'error' in response_data:
+                print(f"❌ API Error: {response_data.get('message', 'Unknown error')}")
+                return total_tweets, total_pages, False
+                
+            elif response_data.get('tweets') is not None:
+                tweets_on_page = response_data['tweets']
+                total_pages += 1
+                
+                print(f"📊 Tweets received on this page: {len(tweets_on_page)}")
+                
+                if tweets_on_page and len(tweets_on_page) > 0:
+                    # Reset consecutive empty pages counter
+                    consecutive_empty_pages = 0
+                    
+                    # Save tweets for this page
+                    file_path = os.path.join(project_dir, f"tweets_{username}_{start_date}_to_{end_date}_page_{page_number:03d}.json")
+                    with open(file_path, 'w', encoding='utf-8') as f:
+                        json.dump(tweets_on_page, f, indent=2, ensure_ascii=False)
+                    
+                    print(f"💾 Saved {len(tweets_on_page)} tweets to {file_path}")
+                    total_tweets += len(tweets_on_page)
+                    
+                    # Update pagination
+                    has_next_page = response_data.get('has_next_page', False)
+                    next_cursor = response_data.get('next_cursor', "")
+                    
+                    if next_cursor and next_cursor != cursor:
+                        cursor = next_cursor
+                        print(f"📄 Has next page: {has_next_page}")
+                        print(f"🔗 Next cursor: '{cursor}'")
+                    else:
+                        print("🔚 No more pages available (cursor unchanged or empty)")
+                        has_next_page = False
+                    
+                    # Add delay to avoid rate limiting
+                    if has_next_page:
+                        print(f"⏳ Waiting {delay_between_requests} seconds before next request...")
+                        time.sleep(delay_between_requests)
+                    
+                else:
+                    # Handle empty page
+                    consecutive_empty_pages += 1
+                    print(f"⚠️  Empty page received (consecutive: {consecutive_empty_pages})")
+                    
+                    if consecutive_empty_pages >= max_consecutive_empty:
+                        print(f"⚠️  Too many consecutive empty pages ({consecutive_empty_pages}). Stopping.")
+                        has_next_page = False
+                    else:
+                        has_next_page = response_data.get('has_next_page', False)
+                        next_cursor = response_data.get('next_cursor', "")
+                        
+                        if next_cursor and next_cursor != cursor:
+                            cursor = next_cursor
+                            print(f"📄 Has next page: {has_next_page}")
+                            print(f"🔗 Next cursor: '{cursor}'")
+                        else:
+                            has_next_page = False
+                    
+            else:
+                print(f"❌ Unexpected response format: {response_data}")
+                break
+                
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Network/Request Error: {str(e)}")
             return total_tweets, total_pages, False
-
-    print(f"\n✅ RANGE {start_date} to {end_date} (MONTHLY) COMPLETED")
+        except json.JSONDecodeError as e:
+            print(f"❌ JSON Decode Error: {str(e)}")
+            print(f"Response text: {response.text[:200]}...")
+            return total_tweets, total_pages, False
+        except Exception as e:
+            print(f"❌ Unexpected error: {str(e)}")
+            return total_tweets, total_pages, False
+        
+        page_number += 1
+        
+        # Safety check
+        if page_number > 1000:
+            print("⚠️  Reached maximum page limit (1000). Stopping for safety.")
+            break
+    
+    print(f"\n✅ RANGE {start_date} to {end_date} COMPLETED")
     print(f"📊 Total tweets saved: {total_tweets}")
     print(f"📄 Total pages processed: {total_pages}")
     print(f"📁 Files saved in: {project_dir}")
-
+    
     return total_tweets, total_pages, True
 
 def ping_user_years(username, start_year, end_year, api_key, progress_callback=None):

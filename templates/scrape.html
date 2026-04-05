@@ -36,6 +36,16 @@
                         </div>
                     </div>
 
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" name="monthly_chunks" id="monthly_chunks" value="on">
+                        <label class="form-check-label" for="monthly_chunks">
+                            One API query per month (example: <code>tweets_handle_2026_01_page_001.json</code>)
+                        </label>
+                        <div class="form-text">
+                            Safer if the run fails: completed months stay on disk; only the current month is lost.
+                        </div>
+                    </div>
+
                     <div class="d-grid gap-2 mt-4">
                         <button type="submit" class="btn btn-primary">Start Scraping</button>
                     </div>

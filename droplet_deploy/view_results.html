@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Positioning Plan Viewer</title>
+  <style>
+    :root {
+      --bg: #0f0f12;
+      --surface: #1a1a1f;
+      --border: #2a2a32;
+      --text: #e4e4e7;
+      --muted: #71717a;
+      --accent: #22c55e;
+      --accent-dim: #16a34a;
+      --bearish: #ef4444;
+      --bullish: #22c55e;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+    }
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+    .sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1rem 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    .sidebar h2 {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 0 1rem;
+      margin: 0 0 0.5rem;
+    }
+    .nav-item {
+      display: block;
+      padding: 0.4rem 1rem;
+      color: var(--text);
+      text-decoration: none;
+      transition: background 0.15s;
+      border-left: 3px solid transparent;
+    }
+    .nav-item:hover {
+      background: rgba(255,255,255,0.04);
+    }
+    .nav-item.active {
+      background: rgba(34,197,94,0.1);
+      border-left-color: var(--accent);
+      color: var(--accent);
+    }
+    .main {
+      flex: 1;
+      padding: 2rem 3rem 4rem;
+      max-width: 900px;
+    }
+    section {
+      margin-bottom: 3rem;
+      scroll-margin-top: 1rem;
+    }
+    section:target {
+      animation: highlight 1.5s ease-out;
+    }
+    @keyframes highlight {
+      from { background: rgba(34,197,94,0.15); }
+      to { background: transparent; }
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin: 0 0 0.25rem;
+      color: var(--text);
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 1.5rem 0 0.75rem;
+      color: var(--accent);
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+    .card-title {
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      padding: 0.2em 0.5em;
+      border-radius: 4px;
+      margin-right: 0.25rem;
+      margin-bottom: 0.25rem;
+    }
+    .tag.bearish { background: rgba(239,68,68,0.2); color: var(--bearish); }
+    .tag.bullish { background: rgba(34,197,94,0.2); color: var(--bullish); }
+    .tag.warning { background: rgba(245,158,11,0.2); color: var(--warning); }
+    .tag.muted { background: rgba(113,113,122,0.2); color: var(--muted); }
+    .tag.critical { background: rgba(239,68,68,0.3); color: #fca5a5; }
+    .tag.elevated { background: rgba(245,158,11,0.3); color: #fcd34d; }
+    .tag.watch { background: rgba(113,113,122,0.3); color: var(--muted); }
+    ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+    .handle { color: var(--accent); }
+    .briefing {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 768px) {
+      .layout { flex-direction: column; }
+      .sidebar { width: 100%; height: auto; position: relative; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <nav class="sidebar">
+      <h2>Navigation</h2>
+      <a href="#overview" class="nav-item">Overview</a>
+      <a href="#commentators" class="nav-item">Commentators</a>
+      <a href="#themes" class="nav-item">Theme Map</a>
+      <a href="#convergence" class="nav-item">Convergence Matrix</a>
+      <a href="#positioning" class="nav-item">Positioning Plan</a>
+      <a href="#tail-risks" class="nav-item">Tail Risks</a>
+      <a href="#conflicts" class="nav-item">Conflicts</a>
+      <a href="#integrity" class="nav-item">Info Integrity</a>
+      <a href="#briefing" class="nav-item">Daily Briefing</a>
+    </nav>
+    <main class="main">
+      <div id="content"></div>
+    </main>
+  </div>
+
+  <script>
+    async function loadData() {
+      try {
+        // Try to fetch from the default output location
+        const res = await fetch('agenti/output/positioning_plan.json');
+        if (!res.ok) throw new Error('Not found');
+        return await res.json();
+      } catch {
+        return null;
+      }
+    }
+
+    function render(data) {
+      if (!data) {
+        document.getElementById('content').innerHTML = `
+          <section id="overview">
+            <h1>Positioning Plan Viewer</h1>
+            <p style="color:var(--muted)">
+              Could not auto-load <code>agenti/output/positioning_plan.json</code>.
+            </p>
+            <p style="color:var(--muted)">
+              If you are opening this file directly in a browser, you may need to manually select the JSON file due to security restrictions.
+            </p>
+            <p style="margin-top:1rem">
+              <label for="file-input" class="card" style="cursor:pointer;display:inline-block;padding:0.75rem 1.25rem">
+                Load JSON file...
+              </label>
+              <input type="file" accept=".json" id="file-input" style="display:none">
+            </p>
+          </section>
+        `;
+        document.getElementById('file-input')?.addEventListener('change', e => {
+          const f = e.target.files?.[0];
+          if (f) f.text().then(t => render(JSON.parse(t)));
+        });
+        return;
+      }
+
+      const sections = [];
+
+      // Overview
+      sections.push(`
+        <section id="overview">
+          <h1>Positioning Plan</h1>
+          <div class="meta">${data.date} · ${data.commentators_ingested?.length || 0} commentators</div>
+        </section>
+      `);
+
+      // Commentators
+      sections.push(`
+        <section id="commentators">
+          <h3>Commentators Ingested</h3>
+          ${(data.commentators_ingested || []).map(c => `
+            <div class="card">
+              <div class="card-title"><span class="handle">${c.handle}</span> · ${c.signal_count} signals</div>
+              <div class="meta">${c.overall_tone}</div>
+              <div class="meta">${(c.primary_domains || []).join(' · ')}</div>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Theme Map
+      sections.push(`
+        <section id="themes">
+          <h3>Theme Map</h3>
+          ${(data.theme_map || []).map(t => `
+            <div class="card">
+              <div class="card-title">${t.theme}</div>
+              <div class="meta">${(t.commentators_discussing || []).join(', ')}</div>
+              <span class="tag ${t.consensus_direction}">${t.consensus_direction}</span>
+              <span class="tag muted">${t.maturity}</span>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Convergence Matrix
+      sections.push(`
+        <section id="convergence">
+          <h3>Convergence Matrix</h3>
+          ${(data.convergence_matrix || []).map(a => `
+            <div class="card">
+              <div class="card-title">${a.asset_or_theme}</div>
+              <span class="tag muted">${a.asset_class}</span>
+              <span class="tag ${a.weighted_direction === 'long' ? 'bullish' : a.weighted_direction === 'short' ? 'bearish' : 'muted'}">${a.weighted_direction}</span>
+              <span class="tag muted">${a.net_signal}</span>
+              <div class="meta" style="margin-top:0.5rem">Aligned: ${(a.aligned_signals || []).map(s => `${s.handle} ${s.direction}`).join('; ')}</div>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Positioning Plan
+      const pp = data.positioning_plan || {};
+      const ppSections = [];
+
+      if (pp.framework) {
+        ppSections.push(`<div class="meta">Framework: ${pp.framework}</div>`);
+      }
+
+      if (pp.safe_leg) {
+        ppSections.push(`
+          <h3>Safe Leg</h3>
+          <p class="meta">${pp.safe_leg.description}</p>
+          ${(pp.safe_leg.positions || []).map(p => `
+            <div class="card">
+              <div class="card-title">${p.instrument_or_theme}</div>
+              <p>${p.rationale}</p>
+              <div class="meta">${p.sizing_guidance}</div>
+            </div>
+          `).join('')}
+        `);
+      }
+
+      if (pp.core_positions?.length) {
+        ppSections.push(`
+          <h3>Core Positions</h3>
+          ${pp.core_positions.map(p => `
+            <div class="card">
+              <div class="card-title">${p.instrument_or_theme}</div>
+              <span class="tag ${p.direction === 'long' ? 'bullish' : 'bearish'}">${p.direction}</span>
+              <span class="tag muted">${p.conviction}</span>
+              <p style="margin-top:0.75rem">${p.thesis_summary}</p>
+              <div class="meta"><strong>Key risk:</strong> ${p.key_risk}</div>
+              <div class="meta"><strong>Entry:</strong> ${p.entry_signal}</div>
+              <div class="meta"><strong>Exit:</strong> ${p.exit_signal}</div>
+              <div class="meta">${p.sizing_guidance}</div>
+            </div>
+          `).join('')}
+        `);
+      }
+
+      if (pp.convex_bets?.length) {
+        ppSections.push(`
+          <h3>Convex Bets</h3>
+          ${pp.convex_bets.map(b => `
+            <div class="card">
+              <div class="card-title">${b.instrument_or_theme}</div>
+              <span class="tag ${b.direction === 'long' ? 'bullish' : 'bearish'}">${b.direction}</span>
+              <p class="meta">Scenario: ${b.scenario_required}</p>
+              <div class="grid-2">
+                <div class="meta">Loss if wrong: ${b.loss_if_wrong}</div>
+                <div class="meta">Gain if right: ${b.gain_if_right}</div>
+              </div>
+              <div class="meta">${b.sizing_guidance}</div>
+            </div>
+          `).join('')}
+        `);
+      }
+
+      if (pp.explicit_avoids?.length) {
+        ppSections.push(`
+          <h3>Explicit Avoids</h3>
+          ${pp.explicit_avoids.map(a => `
+            <div class="card">
+              <div class="card-title">${a.instrument_or_theme}</div>
+              <span class="tag warning">${a.fragility_type}</span>
+              <p>${a.why}</p>
+            </div>
+          `).join('')}
+        `);
+      }
+
+      sections.push(`<section id="positioning"><h3>Positioning Plan</h3>${ppSections.join('')}</section>`);
+
+      // Tail Risks
+      sections.push(`
+        <section id="tail-risks">
+          <h3>Tail Risk Register</h3>
+          ${(data.tail_risk_register || []).map(r => `
+            <div class="card">
+              <div class="card-title">${r.scenario}</div>
+              <span class="tag ${r.status}">${r.status}</span>
+              <span class="tag muted">${r.count} source(s)</span>
+              <div class="meta">${(r.flagged_by || []).join(', ')}</div>
+              <p>${r.interaction_effects}</p>
+              <div class="meta">Hedges: ${(r.hedge_options || []).join('; ')}</div>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Conflicts
+      sections.push(`
+        <section id="conflicts">
+          <h3>Conflicts Requiring Judgment</h3>
+          ${(data.conflicts_requiring_judgment || []).map(c => `
+            <div class="card">
+              <div class="card-title">${c.topic}</div>
+              ${(c.views || []).map(v => `
+                <div class="meta" style="margin-top:0.5rem"><span class="handle">${v.handle}</span>: ${v.position}</div>
+              `).join('')}
+              <p><strong>Stakes:</strong> ${c.stakes}</p>
+              <div class="meta"><strong>Resolution:</strong> ${c.resolution_catalyst}</div>
+              <div class="meta"><strong>Approach:</strong> ${c.suggested_approach}</div>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Info Integrity
+      const ii = data.information_integrity || {};
+      sections.push(`
+        <section id="integrity">
+          <h3>Information Integrity</h3>
+          <div class="meta">${ii.unverified_claims_count || 0} unverified claims</div>
+          ${(ii.highest_impact_unverified || []).map(u => `
+            <div class="card">
+              <div class="card-title">${u.claim}</div>
+              <span class="handle">${u.source}</span>
+              <p class="meta">${u.potential_impact}</p>
+              <div class="meta">Verify: ${u.verification_suggestion}</div>
+            </div>
+          `).join('')}
+        </section>
+      `);
+
+      // Daily Briefing
+      sections.push(`
+        <section id="briefing">
+          <h3>Daily Briefing</h3>
+          <div class="briefing">${(data.daily_briefing || '').replace(/\n/g, '<br>')}</div>
+        </section>
+      `);
+
+      document.getElementById('content').innerHTML = sections.join('');
+
+      // Active nav on scroll
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const link = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+            if (link) link.classList.add('active');
+          }
+        });
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+    }
+
+    loadData().then(render);
+  </script>
+</body>
+</html>

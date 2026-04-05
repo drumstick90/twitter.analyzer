@@ -7,10 +7,13 @@ class GrowthAnalyzer:
         self._preprocess()
 
     def _preprocess(self):
-        # Ensure date column exists and is datetime
+        # Ensure date column exists and is pandas-datetimelike (not plain datetime.date / object)
         if 'date' not in self.df.columns and 'date_short' in self.df.columns:
-            self.df['date'] = pd.to_datetime(self.df['date_short'])
-        
+            self.df['date'] = self.df['date_short']
+
+        if 'date' in self.df.columns:
+            self.df['date'] = pd.to_datetime(self.df['date'])
+
         if 'date' in self.df.columns:
             self.df['month'] = self.df['date'].dt.month
             self.df['week_of_year'] = self.df['date'].dt.isocalendar().week

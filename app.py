@@ -22,7 +22,15 @@ import pandas as pd
 from typing import Optional
 from datetime import datetime
 
-from src.data.scraper import scrape_user_tweets_by_year, scrape_user_tweets_by_range, scraper_state, ping_user_years, scrape_multi_user_24h
+from src.data.scraper import (
+    scrape_user_tweets_by_year,
+    scrape_user_tweets_by_year_monthly,
+    scrape_user_tweets_by_range,
+    scrape_user_tweets_by_range_monthly,
+    scraper_state,
+    ping_user_years,
+    scrape_multi_user_24h,
+)
 from src.data.loader import load_json_tweets, get_available_datasets, load_csv_data, load_conversation_parents
 from src.analysis.growth import GrowthAnalyzer
 from src.analysis.temporal import TemporalAnalyzer
@@ -142,7 +150,7 @@ async def read_root(request: Request, auth: bool = Depends(verify_auth)):
 async def scrape_form(request: Request, auth: bool = Depends(verify_auth)):
     return templates.TemplateResponse("scrape.html", {"request": request})
 
-def run_scrape_task(username, year, start_date, end_date, api_key, project_dir):
+def run_scrape_task(username, year, start_date, end_date, api_key, project_dir, monthly_chunks: bool):
     global current_task
     current_task["status"] = "running"
     current_task["message"] = "Scraping in progress..."
@@ -151,7 +159,14 @@ def run_scrape_task(username, year, start_date, end_date, api_key, project_dir):
     try:
         success = False
         if year:
-            total_tweets, pages, success = scrape_user_tweets_by_year(username, year, api_key, project_dir)
+            if monthly_chunks:
+                total_tweets, pages, success = scrape_user_tweets_by_year_monthly(
+                    username, year, api_key, project_dir
+                )
+            else:
+                total_tweets, pages, success = scrape_user_tweets_by_year(
+                    username, year, api_key, project_dir
+                )
             if scraper_state.stop_requested:
                 current_task["message"] = f"Scraping stopped by user. Saved {total_tweets} tweets."
                 current_task["status"] = "stopped"
@@ -159,7 +174,14 @@ def run_scrape_task(username, year, start_date, end_date, api_key, project_dir):
                 current_task["message"] = f"Scraping completed. Saved {total_tweets} tweets in {pages} pages."
                 current_task["status"] = "completed"
         elif start_date and end_date:
-            total_tweets, pages, success = scrape_user_tweets_by_range(username, start_date, end_date, api_key, project_dir)
+            if monthly_chunks:
+                total_tweets, pages, success = scrape_user_tweets_by_range_monthly(
+                    username, start_date, end_date, api_key, project_dir
+                )
+            else:
+                total_tweets, pages, success = scrape_user_tweets_by_range(
+                    username, start_date, end_date, api_key, project_dir
+                )
             if scraper_state.stop_requested:
                 current_task["message"] = f"Scraping stopped by user. Saved {total_tweets} tweets."
                 current_task["status"] = "stopped"
@@ -183,6 +205,7 @@ async def scrape_submit(
     year: Optional[int] = Form(None),
     start_date: Optional[str] = Form(None),
     end_date: Optional[str] = Form(None),
+    monthly_chunks: Optional[str] = Form(None),
     auth: bool = Depends(verify_auth)
 ):
     api_key = os.getenv("TWITTERAPI_KEY")
@@ -204,8 +227,24 @@ async def scrape_submit(
 
     project_dir = os.path.join("datasets", f"{username}_tweets_analysis")
     os.makedirs(project_dir, exist_ok=True)
-    
-    background_tasks.add_task(run_scrape_task, username, year, start_date, end_date, api_key, project_dir)
+
+    monthly = monthly_chunks is not None and str(monthly_chunks).lower() in (
+        "on",
+        "true",
+        "1",
+        "yes",
+    )
+
+    background_tasks.add_task(
+        run_scrape_task,
+        username,
+        year,
+        start_date,
+        end_date,
+        api_key,
+        project_dir,
+        monthly,
+    )
     
     return RedirectResponse(url="/scrape/status", status_code=303)
 
