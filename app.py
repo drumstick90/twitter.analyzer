@@ -49,7 +49,8 @@ templates = Jinja2Templates(directory="templates")
 current_task = {
     "status": "idle",
     "message": "",
-    "project_dir": ""
+    "project_dir": "",
+    "logs": [],
 }
 
 # Global state for ping task
@@ -159,7 +160,12 @@ def run_scrape_task(username, year, start_date, end_date, api_key, project_dir, 
     current_task["status"] = "running"
     current_task["message"] = "Scraping in progress..."
     current_task["project_dir"] = project_dir
-    
+    current_task["logs"] = []
+
+    original_stdout = sys.stdout
+    tee = _TeeLogWriter(original_stdout, current_task["logs"])
+    sys.stdout = tee
+
     try:
         success = False
         if year:
@@ -192,7 +198,7 @@ def run_scrape_task(username, year, start_date, end_date, api_key, project_dir, 
             else:
                 current_task["message"] = f"Scraping completed. Saved {total_tweets} tweets in {pages} pages."
                 current_task["status"] = "completed"
-        
+
         if not success and not scraper_state.stop_requested:
              current_task["status"] = "failed"
              current_task["message"] = "Scraping failed. Check logs."
@@ -200,6 +206,9 @@ def run_scrape_task(username, year, start_date, end_date, api_key, project_dir, 
     except Exception as e:
         current_task["status"] = "error"
         current_task["message"] = f"Error: {str(e)}"
+    finally:
+        tee.flush()
+        sys.stdout = original_stdout
 
 @app.post("/scrape")
 async def scrape_submit(
@@ -258,7 +267,16 @@ async def scrape_status(request: Request, auth: bool = Depends(verify_auth)):
         "request": request,
         "status": current_task["status"],
         "message": current_task["message"],
-        "project_dir": current_task["project_dir"]
+        "project_dir": current_task["project_dir"],
+        "logs": current_task.get("logs", []),
+    })
+
+@app.get("/scrape/status/logs")
+async def scrape_status_logs(auth: bool = Depends(verify_auth)):
+    return JSONResponse({
+        "status": current_task["status"],
+        "message": current_task["message"],
+        "logs": current_task.get("logs", []),
     })
 
 @app.post("/scrape/stop")

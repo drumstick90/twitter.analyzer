@@ -1,4 +1,5 @@
 import calendar
+import glob
 import requests
 import json
 import os
@@ -24,8 +25,11 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
     Run one advanced-search query with cursor pagination.
 
     Saves pages as {file_stem_prefix}_page_{NNN}.json under project_dir.
+    Each file contains only tweets whose id had not appeared in earlier pages
+    for this query (deduped). Stops early if a page returns tweets but none are
+    new — avoids burning pages/credits when the API repeats the same window.
 
-    Returns (total_tweets_this_query, pages_this_query, success).
+    Returns (total_unique_tweets_saved, pages_fetched_from_api, success).
     """
     url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
     headers = {"X-API-Key": api_key}
@@ -42,6 +46,7 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
     delay_between_requests = 1
     consecutive_empty_pages = 0
     max_consecutive_empty = 3
+    seen_ids = set()
 
     while has_next_page:
         if scraper_state.stop_requested:
@@ -82,31 +87,57 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
             if tweets_on_page and len(tweets_on_page) > 0:
                 consecutive_empty_pages = 0
 
-                file_path = os.path.join(
-                    project_dir, f"{file_stem_prefix}_page_{page_number:03d}.json"
-                )
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(tweets_on_page, f, indent=2, ensure_ascii=False)
+                new_tweets = []
+                for t in tweets_on_page:
+                    if not isinstance(t, dict):
+                        continue
+                    tid = t.get("id")
+                    if tid is None:
+                        continue
+                    sid = str(tid)
+                    if sid in seen_ids:
+                        continue
+                    seen_ids.add(sid)
+                    new_tweets.append(t)
 
-                print(f"💾 Saved {len(tweets_on_page)} tweets to {file_path}")
-                total_tweets += len(tweets_on_page)
-
-                has_next_page = response_data.get("has_next_page", False)
-                next_cursor = response_data.get("next_cursor", "")
-
-                if next_cursor and next_cursor != cursor:
-                    cursor = next_cursor
-                    print(f"📄 Has next page: {has_next_page}")
-                    print(f"🔗 Next cursor: '{cursor}'")
-                else:
-                    print("🔚 No more pages available (cursor unchanged or empty)")
-                    has_next_page = False
-
-                if has_next_page:
+                if len(new_tweets) == 0:
                     print(
-                        f"⏳ Waiting {delay_between_requests} seconds before next request..."
+                        "🔚 Stopping: this page repeated only tweets we already have "
+                        f"({len(tweets_on_page)} rows, 0 new ids). API cursor was looping."
                     )
-                    time.sleep(delay_between_requests)
+                    has_next_page = False
+                else:
+                    if len(new_tweets) < len(tweets_on_page):
+                        print(
+                            f"   ({len(new_tweets)} new, "
+                            f"{len(tweets_on_page) - len(new_tweets)} duplicate ids skipped)"
+                        )
+
+                    file_path = os.path.join(
+                        project_dir, f"{file_stem_prefix}_page_{page_number:03d}.json"
+                    )
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        json.dump(new_tweets, f, indent=2, ensure_ascii=False)
+
+                    print(f"💾 Saved {len(new_tweets)} new tweets to {file_path}")
+                    total_tweets += len(new_tweets)
+
+                    has_next_page = response_data.get("has_next_page", False)
+                    next_cursor = response_data.get("next_cursor", "")
+
+                    if next_cursor and next_cursor != cursor:
+                        cursor = next_cursor
+                        print(f"📄 Has next page: {has_next_page}")
+                        print(f"🔗 Next cursor: '{cursor}'")
+                    else:
+                        print("🔚 No more pages available (cursor unchanged or empty)")
+                        has_next_page = False
+
+                    if has_next_page:
+                        print(
+                            f"⏳ Waiting {delay_between_requests} seconds before next request..."
+                        )
+                        time.sleep(delay_between_requests)
 
             else:
                 consecutive_empty_pages += 1
@@ -461,102 +492,27 @@ def scrape_user_24h(username, api_key, project_dir, include_thread_context=False
     print(f"{'='*60}")
     print(f"Output directory: {project_dir}")
 
-    url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
-    headers = {"X-API-Key": api_key}
     search_query = f"from:{username} since:{start_str} until:{end_str}"
-    query_type = "Latest"
+    file_stem_prefix = f"tweets_{username}_24h_{date_label}"
 
-    print(f"Search query: {search_query}")
+    total_tweets, total_pages, ok = _paginate_advanced_search(
+        api_key, search_query, project_dir, file_stem_prefix
+    )
 
-    cursor = ""
-    has_next_page = True
-    page_number = 1
-    total_tweets = 0
-    total_pages = 0
-    delay_between_requests = 1
-    consecutive_empty_pages = 0
-    max_consecutive_empty = 3
     all_reply_ids = set()
-
-    while has_next_page:
-        if scraper_state.stop_requested:
-            print("\n🛑 SCRAPING STOPPED BY USER")
-            break
-
-        print(f"\n--- Fetching Page {page_number} ---")
-
-        querystring = {"query": search_query, "queryType": query_type, "cursor": cursor}
-
-        try:
-            response = requests.get(url, headers=headers, params=querystring)
-            if response.status_code != 200:
-                print(f"❌ HTTP Error {response.status_code}: {response.text}")
-                break
-
-            response_data = response.json()
-            if "error" in response_data:
-                print(f"❌ API Error: {response_data.get('message', 'Unknown error')}")
-                break
-
-            if response_data.get("tweets") is not None:
-                tweets_on_page = response_data["tweets"]
-                total_pages += 1
-                print(f"📊 Tweets received on this page: {len(tweets_on_page)}")
-
-                if tweets_on_page and len(tweets_on_page) > 0:
-                    consecutive_empty_pages = 0
-                    if include_thread_context:
-                        for t in tweets_on_page:
-                            rid = t.get("inReplyToId")
-                            if rid:
-                                all_reply_ids.add(str(rid))
-
-                    file_path = os.path.join(
-                        project_dir,
-                        f"tweets_{username}_24h_{date_label}_page_{page_number:03d}.json",
-                    )
-                    with open(file_path, "w", encoding="utf-8") as f:
-                        json.dump(tweets_on_page, f, indent=2, ensure_ascii=False)
-                    print(f"💾 Saved {len(tweets_on_page)} tweets to {file_path}")
-                    total_tweets += len(tweets_on_page)
-
-                    has_next_page = response_data.get("has_next_page", False)
-                    next_cursor = response_data.get("next_cursor", "")
-                    if next_cursor and next_cursor != cursor:
-                        cursor = next_cursor
-                        if has_next_page:
-                            time.sleep(delay_between_requests)
-                    else:
-                        has_next_page = False
-                else:
-                    consecutive_empty_pages += 1
-                    if consecutive_empty_pages >= max_consecutive_empty:
-                        has_next_page = False
-                    else:
-                        has_next_page = response_data.get("has_next_page", False)
-                        next_cursor = response_data.get("next_cursor", "")
-                        if next_cursor and next_cursor != cursor:
-                            cursor = next_cursor
-                        else:
-                            has_next_page = False
-            else:
-                print(f"❌ Unexpected response format: {response_data}")
-                break
-
-        except requests.exceptions.RequestException as e:
-            print(f"❌ Network/Request Error: {str(e)}")
-            break
-        except json.JSONDecodeError as e:
-            print(f"❌ JSON Decode Error: {str(e)}")
-            break
-        except Exception as e:
-            print(f"❌ Unexpected error: {str(e)}")
-            break
-
-        page_number += 1
-        if page_number > 1000:
-            print("⚠️  Reached maximum page limit (1000). Stopping for safety.")
-            break
+    if include_thread_context:
+        pattern = os.path.join(project_dir, f"{file_stem_prefix}_page_*.json")
+        for fp in sorted(glob.glob(pattern)):
+            try:
+                with open(fp, encoding="utf-8") as f:
+                    page_tweets = json.load(f)
+                if not isinstance(page_tweets, list):
+                    continue
+                for t in page_tweets:
+                    if isinstance(t, dict) and t.get("inReplyToId"):
+                        all_reply_ids.add(str(t["inReplyToId"]))
+            except (json.JSONDecodeError, OSError):
+                continue
 
     if include_thread_context and all_reply_ids:
         print(f"📥 Fetching {len(all_reply_ids)} parent tweets for thread context...")
