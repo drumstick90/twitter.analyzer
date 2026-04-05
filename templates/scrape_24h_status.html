@@ -2,78 +2,59 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-10 col-lg-9">
-        <div class="card">
-            <div class="card-header">
-                <h3>24h Scrape Status</h3>
-            </div>
-            <div class="card-body text-center">
-                <h4 class="mb-3">Status:
-                    {% if status == 'running' %}
-                        <span class="badge bg-primary">Running</span>
-                    {% elif status == 'completed' %}
-                        <span class="badge bg-success">Completed</span>
-                    {% elif status == 'stopped' %}
-                        <span class="badge bg-warning text-dark">Stopped</span>
-                    {% elif status == 'failed' or status == 'error' %}
-                        <span class="badge bg-danger">Failed</span>
-                    {% else %}
-                        <span class="badge bg-secondary">{{ status }}</span>
-                    {% endif %}
-                </h4>
-
-                <p class="lead">{{ message }}</p>
-
-                {% if usernames and usernames|length > 0 and status == 'running' %}
-                    <p class="text-muted">Current: {{ current_index + 1 }} of {{ usernames|length }} — @{{ usernames[current_index] if current_index < usernames|length else '' }}</p>
+    <div class="col-md-10 col-lg-8">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h1 class="mb-0" style="font-size:1.25rem">
+                24h scrape
+                {% if status == 'running' %}<span class="badge bg-primary ms-2">Running</span>
+                {% elif status == 'completed' %}<span class="badge bg-success ms-2">Done</span>
+                {% elif status == 'stopped' %}<span class="badge bg-warning ms-2">Stopped</span>
+                {% elif status == 'failed' or status == 'error' %}<span class="badge bg-danger ms-2">Failed</span>
+                {% else %}<span class="badge bg-secondary ms-2">{{ status }}</span>
                 {% endif %}
-
-                {% if results and results|length > 0 %}
-                    <div class="mt-4 text-start">
-                        <h5>Completed users</h5>
-                        <ul class="list-group list-group-flush">
-                            {% for r in results %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <span>@{{ r.username }}</span>
-                                <span>
-                                    {% if r.status == 'completed' %}
-                                        <span class="badge bg-success">{{ r.tweet_count }} tweets</span>
-                                    {% else %}
-                                        <span class="badge bg-danger">{{ r.error|default('Error') }}</span>
-                                    {% endif %}
-                                </span>
-                            </li>
-                            {% endfor %}
-                        </ul>
-                    </div>
-                {% endif %}
-
-                {% if project_dirs and project_dirs|length > 0 %}
-                    <p class="mt-3 text-muted small">Output: {% for d in project_dirs %}<code>{{ d }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
-                {% endif %}
-
-                {% if status == 'running' %}
-                    <form action="/scrape-24h/stop" method="post" class="mt-4">
-                        <button type="submit" class="btn btn-danger btn-lg">Stop Scraping</button>
-                    </form>
-                {% else %}
-                    <div class="d-grid gap-2 mt-4">
-                        <a href="/analyze" class="btn btn-success">Go to Analysis</a>
-                        <a href="/scrape-24h" class="btn btn-secondary">Scrape Another</a>
-                    </div>
-                {% endif %}
-            </div>
+            </h1>
         </div>
 
-        <div class="card mt-4">
+        <p>{{ message }}</p>
+
+        {% if usernames and usernames|length > 0 and status == 'running' %}
+        <p class="text-muted small">Processing {{ current_index + 1 }}/{{ usernames|length }} — @{{ usernames[current_index] if current_index < usernames|length else '' }}</p>
+        {% endif %}
+
+        {% if results and results|length > 0 %}
+        <div class="card mb-3">
+            <div class="card-header">Results</div>
+            <ul class="list-group list-group-flush">
+                {% for r in results %}
+                <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                    <span class="small">@{{ r.username }}</span>
+                    {% if r.status == 'completed' %}<span class="badge bg-success">{{ r.tweet_count }}</span>
+                    {% else %}<span class="badge bg-danger">{{ r.error|default('Error') }}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if status == 'running' %}
+        <form action="/scrape-24h/stop" method="post" class="mb-3">
+            <button type="submit" class="btn btn-danger btn-sm">Stop</button>
+        </form>
+        {% else %}
+        <div class="d-flex gap-2 mb-3">
+            <a href="/analyze" class="btn btn-primary btn-sm">Analyze</a>
+            <a href="/scrape-24h" class="btn btn-secondary btn-sm">New 24h scrape</a>
+        </div>
+        {% endif %}
+
+        <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Live log</h5>
-                {% if status == 'running' %}
-                <span class="badge bg-success">auto-refreshing</span>
-                {% endif %}
+                <span>Log</span>
+                {% if status == 'running' %}<span class="badge bg-success">live</span>{% endif %}
             </div>
             <div class="card-body p-0">
-                <pre id="log-output" class="mb-0 p-3 bg-dark text-light" style="max-height: 400px; overflow-y: auto; font-size: 0.85rem; line-height: 1.4;">{% for line in logs|default([]) %}{{ line }}{{ '\n' }}{% endfor %}</pre>
+                <pre id="log-output" class="ib-log-panel mb-0 border-0 rounded-0">{% for line in logs|default([]) %}{{ line }}{{ '\n' }}{% endfor %}</pre>
             </div>
         </div>
     </div>
@@ -82,20 +63,13 @@
 {% if status == 'running' %}
 <script>
 (function() {
-    const logEl = document.getElementById('log-output');
+    const el = document.getElementById('log-output');
     function poll() {
-        fetch('/scrape-24h/status/logs')
-            .then(r => r.json())
-            .then(data => {
-                logEl.textContent = data.logs.join('\n');
-                logEl.scrollTop = logEl.scrollHeight;
-                if (data.status === 'running') {
-                    setTimeout(poll, 2000);
-                } else {
-                    window.location.reload();
-                }
-            })
-            .catch(() => setTimeout(poll, 3000));
+        fetch('/scrape-24h/status/logs').then(r => r.json()).then(d => {
+            el.textContent = d.logs.join('\n');
+            el.scrollTop = el.scrollHeight;
+            if (d.status === 'running') setTimeout(poll, 2000); else location.reload();
+        }).catch(() => setTimeout(poll, 3000));
     }
     setTimeout(poll, 2000);
 })();

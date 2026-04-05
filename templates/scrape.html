@@ -2,52 +2,45 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6 col-xl-5">
+    <div class="col-md-7 col-lg-5">
+        <div class="ib-page-head"><h1>New scrape</h1></div>
+
         <div class="card">
-            <div class="card-header">
-                <h3>New Scrape Task</h3>
-            </div>
             <div class="card-body">
                 <form action="/scrape" method="post">
                     <div class="mb-3">
-                        <label for="username" class="form-label">Twitter Username (without @)</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="without @" required>
                     </div>
-                    
-                    <!-- API Key is now handled server-side via .env -->
-
 
                     <hr>
-                    <h5>Time Range (Choose one)</h5>
 
                     <div class="mb-3">
-                        <label for="year" class="form-label">Specific Year</label>
+                        <label for="year" class="form-label">Year</label>
                         <input type="number" class="form-control" id="year" name="year" placeholder="e.g. 2024">
                     </div>
 
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col">
-                            <label for="start_date" class="form-label">Start Date</label>
+                            <label for="start_date" class="form-label">Start date</label>
                             <input type="date" class="form-control" id="start_date" name="start_date">
                         </div>
                         <div class="col">
-                            <label for="end_date" class="form-label">End Date</label>
+                            <label for="end_date" class="form-label">End date</label>
                             <input type="date" class="form-control" id="end_date" name="end_date">
                         </div>
                     </div>
 
-                    <div class="form-check mt-3">
+                    <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" name="monthly_chunks" id="monthly_chunks" value="on">
                         <label class="form-check-label" for="monthly_chunks">
-                            One API query per month (example: <code>tweets_handle_2026_01_page_001.json</code>)
+                            Split into monthly queries
                         </label>
-                        <div class="form-text">
-                            Safer if the run fails: completed months stay on disk; only the current month is lost.
-                        </div>
+                        <div class="form-text">Completed months stay on disk if the run fails.</div>
                     </div>
 
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary">Start Scraping</button>
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary">Start scrape</button>
                     </div>
                 </form>
             </div>

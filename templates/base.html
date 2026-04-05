@@ -3,81 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Twitter Analyzer</title>
+    <title>{% block title %}Twitter Analyzer{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body { 
-            padding-top: 20px; 
-            background-color: #f8f9fa;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .container-fluid { max-width: 100%; }
-        .card { 
-            margin-bottom: 20px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            border: none;
-        }
-        .navbar {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        main {
-            flex: 1;
-        }
-        footer {
-            margin-top: auto;
-            padding: 20px 0;
-            background-color: #343a40;
-            color: #fff;
-        }
-    </style>
+    <link href="/static/css/ib-theme.css" rel="stylesheet">
+    {% block extra_head %}{% endblock %}
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+<body class="ib-app">
+    {% block navbar %}
+    <nav class="navbar navbar-expand-lg navbar-light ib-nav">
         <div class="container-fluid px-4">
-            <a class="navbar-brand fw-bold" href="/">
-                <span class="text-info">Twitter</span> Analyzer
-            </a>
+            <a class="navbar-brand" href="/">Twitter Analyzer</a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/scrape">Scrape</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/scrape-24h">24h Scrape</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/browse">Browse</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/ping">Ping</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/analyze">Analyze</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-danger" href="/logout">Logout</a>
-                    </li>
+                <ul class="navbar-nav ms-auto gap-lg-1">
+                    <li class="nav-item"><a class="nav-link" href="/scrape">Scrape</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/scrape-24h">24h</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/browse">Browse</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/ping">Ping</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/analyze">Analyze</a></li>
+                    <li class="nav-item"><a class="nav-link ib-logout" href="/logout">Sign out</a></li>
                 </ul>
             </div>
         </div>
     </nav>
+    {% endblock %}
 
-    <main class="container-fluid px-4">
+    <main class="{% block main_classes %}container-fluid px-4{% endblock %}">
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="text-center">
-        <div class="container-fluid">
-            <small>&copy; 2026 Twitter Analyzer. All rights reserved.</small>
-        </div>
+    <footer class="ib-footer text-center">
+        <span>© 2026</span>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

@@ -2,35 +2,31 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6 col-xl-5">
+    <div class="col-md-7 col-lg-5">
+        <div class="ib-page-head">
+            <h1>Ping</h1>
+            <p>Check which years a user was active.</p>
+        </div>
+
         <div class="card">
-            <div class="card-header">
-                <h3>Ping User Activity</h3>
-            </div>
             <div class="card-body">
-                <p>Quickly check which years a user was active without downloading all tweets.</p>
                 <form action="/ping" method="post">
                     <div class="mb-3">
-                        <label for="username" class="form-label">Twitter Username (without @)</label>
-                        <input type="text" class="form-control" id="username" name="username" required>
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="without @" required>
                     </div>
-                    
-                    <div class="row">
+                    <div class="row mb-3">
                         <div class="col">
-                            <label for="start_year" class="form-label">Start Year</label>
+                            <label for="start_year" class="form-label">From</label>
                             <input type="number" class="form-control" id="start_year" name="start_year" value="2006" required>
                         </div>
                         <div class="col">
-                            <label for="end_year" class="form-label">End Year</label>
+                            <label for="end_year" class="form-label">To</label>
                             <input type="number" class="form-control" id="end_year" name="end_year" value="2026" required>
                         </div>
                     </div>
-
-                    <!-- API Key is now handled server-side via .env -->
-
-
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-info text-white">Start Ping</button>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Start</button>
                     </div>
                 </form>
             </div>

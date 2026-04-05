@@ -1,30 +1,55 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="p-5 mb-4 bg-light rounded-3">
-    <div class="container-fluid py-5">
-        <h1 class="display-5 fw-bold">Twitter Analyzer</h1>
-        <p class="col-md-8 fs-4">A powerful tool to scrape and analyze Twitter activity, growth patterns, and engagement metrics.</p>
-        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
-            <a href="/scrape" class="btn btn-primary btn-lg px-4 me-md-2">Start Scraping</a>
-            <a href="/analyze" class="btn btn-outline-secondary btn-lg px-4">View Analysis</a>
-        </div>
-    </div>
+<div class="ib-page-head" style="margin-top:.5rem">
+    <h1>Twitter Analyzer</h1>
+    <p>Scrape public timelines, browse archives, and run analysis.</p>
 </div>
 
-<div class="row align-items-md-stretch">
-    <div class="col-md-6">
-        <div class="h-100 p-5 text-white bg-dark rounded-3">
-            <h2>Scrape Data</h2>
-            <p>Download tweets from any public profile using the Twitter Advanced Search API. Filter by year or date range.</p>
-            <a href="/scrape" class="btn btn-outline-light" type="button">Go to Scraper</a>
+{% if credits %}
+<dl class="ib-credits">
+    <div>
+        <dt>Recharge credits</dt>
+        <dd>{{ "{:,}".format(credits.recharge_credits) }}</dd>
+    </div>
+    <div>
+        <dt>Bonus credits</dt>
+        <dd>{{ "{:,}".format(credits.bonus_credits) }}</dd>
+    </div>
+    <div>
+        <dt>~Tweet capacity</dt>
+        <dd>{{ "{:,}".format(credits.tweets_capacity) }}</dd>
+    </div>
+</dl>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2>Scrape</h2>
+                <p class="text-muted small mb-3">Pull tweets by year, date range, or rolling 24h window.</p>
+                <a href="/scrape" class="btn btn-primary btn-sm">New scrape</a>
+                <a href="/scrape-24h" class="btn btn-outline-secondary btn-sm">24h scrape</a>
+            </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="h-100 p-5 bg-light border rounded-3">
-            <h2>Analyze Trends</h2>
-            <p>Visualize growth escalation, hourly activity heatmaps, and daily likes progression from your downloaded datasets.</p>
-            <a href="/analyze" class="btn btn-outline-secondary" type="button">Go to Analysis</a>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2>Browse</h2>
+                <p class="text-muted small mb-3">Search, filter, and read through scraped tweet archives.</p>
+                <a href="/browse" class="btn btn-outline-secondary btn-sm">Open browser</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2>Analyze</h2>
+                <p class="text-muted small mb-3">Growth trends, hourly heatmaps, likes progression.</p>
+                <a href="/analyze" class="btn btn-outline-secondary btn-sm">Run analysis</a>
+            </div>
         </div>
     </div>
 </div>

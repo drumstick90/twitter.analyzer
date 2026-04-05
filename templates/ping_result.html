@@ -1,74 +1,56 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-12">
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <h1 class="mb-0" style="font-size:1.25rem">
+        Ping · @{{ username }}
+        {% if status == 'running' %}<span class="badge bg-primary ms-2">Running</span>
+        {% elif status == 'completed' %}<span class="badge bg-success ms-2">Done</span>
+        {% elif status == 'error' %}<span class="badge bg-danger ms-2">Error</span>
+        {% endif %}
+    </h1>
+    {% if status != 'running' %}
+    <a href="/ping" class="btn btn-outline-secondary btn-sm">New ping</a>
+    {% endif %}
+</div>
+
+{% if status == 'running' %}
+<form action="/ping/stop" method="post" class="mb-3">
+    <button type="submit" class="btn btn-danger btn-sm">Stop</button>
+</form>
+{% endif %}
+
+<div class="row g-3">
+    <div class="col-md-6">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h3>Ping Results: @{{ username }}</h3>
-                {% if status == 'running' %}
-                    <span class="badge bg-primary">Running...</span>
-                {% elif status == 'completed' %}
-                    <span class="badge bg-success">Completed</span>
-                {% elif status == 'error' %}
-                    <span class="badge bg-danger">Error</span>
-                {% endif %}
-            </div>
-            <div class="card-body">
-                {% if status == 'running' %}
-                    <div class="alert alert-info">
-                        Pinging years... Page auto-refreshes every 2 seconds.
-                    </div>
-                    <form action="/ping/stop" method="post" class="mb-3">
-                        <button type="submit" class="btn btn-danger">Stop Ping</button>
-                    </form>
-                {% endif %}
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5>Timeline</h5>
-                        <div class="list-group mb-3" style="max-height: 400px; overflow-y: auto;">
-                            {% for year, active in results.items() %}
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span class="fw-bold">{{ year }}</span>
-                                    {% if active == True %}
-                                        <span class="badge bg-success rounded-pill">Active ✅</span>
-                                    {% elif active == False %}
-                                        <span class="badge bg-secondary rounded-pill">Inactive ❌</span>
-                                    {% else %}
-                                        <span class="badge bg-warning rounded-pill">Error ⚠️</span>
-                                    {% endif %}
-                                </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h5>Logs</h5>
-                        <div class="bg-dark text-light p-3 rounded" style="font-family: monospace; max-height: 400px; overflow-y: auto; font-size: 0.9rem;">
-                            {% for log in logs %}
-                                <div>{{ log }}</div>
-                            {% endfor %}
-                            {% if not logs %}
-                                <div class="text-muted">No logs yet...</div>
-                            {% endif %}
-                        </div>
-                    </div>
+            <div class="card-header">Years</div>
+            <div class="list-group list-group-flush ib-scroll-box">
+                {% for year, active in results.items() %}
+                <div class="list-group-item d-flex justify-content-between align-items-center py-1">
+                    <span>{{ year }}</span>
+                    {% if active == True %}<span class="badge bg-success">Active</span>
+                    {% elif active == False %}<span class="badge bg-secondary">—</span>
+                    {% else %}<span class="badge bg-warning">Error</span>
+                    {% endif %}
                 </div>
-
-                {% if status == 'running' %}
-                    <script>
-                        setTimeout(function(){
-                           window.location.reload(1);
-                        }, 2000);
-                    </script>
-                {% else %}
-                    <div class="d-grid gap-2 mt-4">
-                        <a href="/ping" class="btn btn-secondary">New Ping</a>
-                        <a href="/scrape" class="btn btn-primary">Go to Scraper</a>
-                    </div>
-                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">Log</div>
+            <div class="card-body p-0">
+                <div class="ib-log-panel border-0 rounded-0">
+                    {% for log in logs %}<div>{{ log }}</div>{% endfor %}
+                    {% if not logs %}<div class="text-muted">Waiting…</div>{% endif %}
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+{% if status == 'running' %}
+<script>setTimeout(function(){ window.location.reload(); }, 2000);</script>
+{% endif %}
 {% endblock %}

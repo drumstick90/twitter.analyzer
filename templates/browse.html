@@ -1,185 +1,156 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Browse Tweets</h2>
-        </div>
+<div class="ib-page-head"><h1>Browse</h1></div>
 
-        <!-- Controls -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <form action="/browse" method="get" class="row g-3 align-items-end">
-                    <div class="col-md-3">
-                        <label for="dataset" class="form-label">Dataset</label>
-                        <select class="form-select" id="dataset" name="dataset" onchange="this.form.submit()">
-                            <option value="" {% if not current_dataset %}selected{% endif %}>Select a dataset...</option>
-                            {% for ds in datasets %}
-                                <option value="{{ ds }}" {% if current_dataset == ds %}selected{% endif %}>{{ ds }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    {% if current_dataset %}
-                    <div class="col-md-3">
-                        <label for="search" class="form-label">Search Text</label>
-                        <input type="text" class="form-control" id="search" name="search" value="{{ search_query }}" placeholder="Keywords...">
-                    </div>
-                    {% if is_content_focused and authors %}
-                    <div class="col-md-2">
-                        <label for="author_filter" class="form-label">Author</label>
-                        <select class="form-select" id="author_filter" name="author_filter">
-                            <option value="">All authors</option>
-                            {% for a in authors %}
-                            <option value="{{ a }}" {% if author_filter == a %}selected{% endif %}>@{{ a }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+<div class="card mb-3">
+    <div class="card-body">
+        <form action="/browse" method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label for="dataset" class="form-label">Dataset</label>
+                <select class="form-select" id="dataset" name="dataset" onchange="this.form.submit()">
+                    <option value="" {% if not current_dataset %}selected{% endif %}>Select…</option>
+                    {% for ds in datasets %}
+                    <option value="{{ ds }}" {% if current_dataset == ds %}selected{% endif %}>{{ ds }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if current_dataset %}
+            <div class="col-md-3">
+                <label for="search" class="form-label">Search</label>
+                <input type="text" class="form-control" id="search" name="search" value="{{ search_query }}" placeholder="Keywords…">
+            </div>
+            {% if is_content_focused and authors %}
+            <div class="col-md-2">
+                <label for="author_filter" class="form-label">Author</label>
+                <select class="form-select" id="author_filter" name="author_filter">
+                    <option value="">All</option>
+                    {% for a in authors %}
+                    <option value="{{ a }}" {% if author_filter == a %}selected{% endif %}>@{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="col-md-2">
+                <label for="sort_by" class="form-label">Sort</label>
+                <select class="form-select" id="sort_by" name="sort_by">
+                    <option value="date_desc" {% if sort_by == 'date_desc' %}selected{% endif %}>Newest</option>
+                    <option value="date_asc" {% if sort_by == 'date_asc' %}selected{% endif %}>Oldest</option>
+                    {% if is_content_focused %}
+                    <option value="author" {% if sort_by == 'author' %}selected{% endif %}>Author</option>
                     {% endif %}
-                    <div class="col-md-2">
-                        <label for="sort_by" class="form-label">Sort By</label>
-                        <select class="form-select" id="sort_by" name="sort_by">
-                            <option value="date_desc" {% if sort_by == 'date_desc' %}selected{% endif %}>Newest First</option>
-                            <option value="date_asc" {% if sort_by == 'date_asc' %}selected{% endif %}>Oldest First</option>
-                            {% if is_content_focused %}
-                            <option value="author" {% if sort_by == 'author' %}selected{% endif %}>Author</option>
-                            {% endif %}
-                            <option value="likes_desc" {% if sort_by == 'likes_desc' %}selected{% endif %}>Most Likes</option>
-                            <option value="retweets_desc" {% if sort_by == 'retweets_desc' %}selected{% endif %}>Most Retweets</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">Apply</button>
-                    </div>
-                    {% endif %}
-                </form>
+                    <option value="likes_desc" {% if sort_by == 'likes_desc' %}selected{% endif %}>Most liked</option>
+                    <option value="retweets_desc" {% if sort_by == 'retweets_desc' %}selected{% endif %}>Most RT</option>
+                </select>
             </div>
-        </div>
-
-        {% if current_dataset %}
-            <div class="row">
-                <!-- Sidebar / Top Mentions -->
-                <div class="col-md-3 mb-4">
-                    <div class="card shadow-sm">
-                        <div class="card-header bg-light">
-                            <strong>Top Mentions</strong>
-                        </div>
-                        <ul class="list-group list-group-flush">
-                            {% for user, count in top_mentions %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                <a href="https://twitter.com/{{ user }}" target="_blank" class="text-decoration-none">@{{ user }}</a>
-                                <span class="badge bg-secondary rounded-pill">{{ count }}</span>
-                            </li>
-                            {% endfor %}
-                            {% if not top_mentions %}
-                            <li class="list-group-item text-muted text-center">No mentions found.</li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                </div>
-
-                <!-- Main Content -->
-                <div class="col-md-9">
-                    <!-- Results Info -->
-                    <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <span class="text-muted">Found {{ total_tweets }} tweets. Showing page {{ page }} of {{ total_pages }}.</span>
-                        {% if is_content_focused %}
-                        <div>
-                            <a href="/24h_accrued/export?format=text{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary me-1">Export for LLM (text)</a>
-                            <a href="/24h_accrued/export?format=json{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary">Export for LLM (JSON)</a>
-                        </div>
-                        {% endif %}
-                        
-                        <!-- Pagination Top -->
-                        <nav aria-label="Page navigation">
-                            <ul class="pagination mb-0">
-                                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                                    <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Previous</a>
-                                </li>
-                                <li class="page-item disabled">
-                                    <span class="page-link">{{ page }} / {{ total_pages }}</span>
-                                </li>
-                                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                                    <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
-                                </li>
-                            </ul>
-                        </nav>
-                    </div>
-
-                    <!-- Tweets Grid -->
-                    <div class="row row-cols-1 row-cols-lg-2 g-4">
-                        {% for tweet in tweets %}
-                        <div class="col">
-                            <div class="card h-100 shadow-sm border rounded-3" style="border: 1px solid #dee2e6;">
-                                {% if tweet.parent_display %}
-                                <div class="card-header bg-light border-bottom py-2 px-3" style="max-height: 120px; overflow-y: auto;">
-                                    <small class="text-muted">Reply to <a href="https://twitter.com/i/web/status/{{ tweet.parent_display.id }}" target="_blank">@{{ tweet.parent_display.author }}</a></small>
-                                    <p class="mb-0 mt-1 small" style="white-space: pre-wrap; font-size: 0.85rem; opacity: 0.9;">{{ tweet.parent_display.text }}</p>
-                                </div>
-                                {% endif %}
-                                <div class="card-header d-flex justify-content-between align-items-center bg-white border-bottom-0 pt-3 px-3">
-                                    <div>
-                                        <strong>@{{ tweet.author }}</strong>
-                                        <small class="text-muted ms-2">{{ tweet.created_at_formatted }}</small>
-                                    </div>
-                                    <a href="https://twitter.com/i/web/status/{{ tweet.id }}" target="_blank" class="btn btn-sm btn-outline-dark rounded-pill px-3">
-                                        View on X ↗
-                                    </a>
-                                </div>
-                                <div class="card-body px-3 pt-2">
-                                    <p class="card-text mb-2" style="white-space: pre-wrap; font-size: 0.95rem;">{{ tweet.text }}</p>
-                                    {% if tweet.media_url %}
-                                        <div class="mt-2 text-center">
-                                            <img src="{{ tweet.media_url }}" class="img-fluid rounded border" style="max-height: 250px; width: auto;" alt="Tweet Media">
-                                        </div>
-                                    {% endif %}
-                                </div>
-                                {% if not is_content_focused %}
-                                <div class="card-footer bg-white border-top-0 pb-3 px-3">
-                                    <hr class="my-2 text-muted" style="opacity: 0.2;">
-                                    <div class="d-flex justify-content-between text-muted small">
-                                        <span title="Likes" class="d-flex align-items-center gap-1">❤️ {{ tweet.likeCount }}</span>
-                                        <span title="Retweets" class="d-flex align-items-center gap-1">🔄 {{ tweet.retweetCount }}</span>
-                                        <span title="Replies" class="d-flex align-items-center gap-1">💬 {{ tweet.replyCount }}</span>
-                                        <span title="Views" class="d-flex align-items-center gap-1">👁️ {{ tweet.viewCount }}</span>
-                                    </div>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-
-                    <!-- Pagination Bottom -->
-                    <div class="mt-4 d-flex justify-content-center">
-                        <nav aria-label="Page navigation">
-                            <ul class="pagination">
-                                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                                    <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Previous</a>
-                                </li>
-                                <li class="page-item disabled">
-                                    <span class="page-link">{{ page }} / {{ total_pages }}</span>
-                                </li>
-                                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                                    <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
-                                </li>
-                            </ul>
-                        </nav>
-                    </div>
-                </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">Apply</button>
             </div>
-
-        {% elif not datasets %}
-            <div class="alert alert-warning">
-                No datasets found. Please <a href="/scrape">scrape some data</a> first.
-            </div>
-        {% else %}
-            <div class="alert alert-info">
-                Please select a dataset to start browsing.
-            </div>
-        {% endif %}
+            {% endif %}
+        </form>
     </div>
 </div>
+
+{% if current_dataset %}
+<div class="row">
+    <div class="col-md-3 mb-3">
+        <div class="card">
+            <div class="card-header">Mentions</div>
+            <ul class="list-group list-group-flush">
+                {% for user, count in top_mentions %}
+                <li class="list-group-item d-flex justify-content-between align-items-center py-1">
+                    <a href="https://twitter.com/{{ user }}" target="_blank" rel="noopener" class="text-decoration-none small">@{{ user }}</a>
+                    <span class="badge bg-secondary rounded-pill">{{ count }}</span>
+                </li>
+                {% endfor %}
+                {% if not top_mentions %}
+                <li class="list-group-item text-muted small text-center py-2">None</li>
+                {% endif %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+            <span class="text-muted small">{{ total_tweets }} tweets · page {{ page }}/{{ total_pages }}</span>
+            {% if is_content_focused %}
+            <div>
+                <a href="/24h_accrued/export?format=text{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary">Export text</a>
+                <a href="/24h_accrued/export?format=json{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary">Export JSON</a>
+            </div>
+            {% endif %}
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Prev</a>
+                    </li>
+                    <li class="page-item disabled"><span class="page-link">{{ page }}/{{ total_pages }}</span></li>
+                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+
+        <div class="row row-cols-1 row-cols-lg-2 g-3">
+            {% for tweet in tweets %}
+            <div class="col">
+                <div class="card h-100 ib-tweet-card">
+                    {% if tweet.parent_display %}
+                    <div class="card-header py-2 px-3">
+                        <small class="text-muted">Re <a href="https://twitter.com/i/web/status/{{ tweet.parent_display.id }}" target="_blank" rel="noopener">@{{ tweet.parent_display.author }}</a></small>
+                        <p class="mb-0 mt-1 ib-parent-snippet">{{ tweet.parent_display.text }}</p>
+                    </div>
+                    {% endif %}
+                    <div class="card-body px-3 pt-3 pb-2">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <strong class="small">@{{ tweet.author }}</strong>
+                                <span class="text-muted small ms-1">{{ tweet.created_at_formatted }}</span>
+                            </div>
+                            <a href="https://twitter.com/i/web/status/{{ tweet.id }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .5rem">View</a>
+                        </div>
+                        <p class="mb-1" style="white-space:pre-wrap;font-size:.9rem">{{ tweet.text }}</p>
+                        {% if tweet.media_url %}
+                        <div class="mt-2 text-center">
+                            <img src="{{ tweet.media_url }}" class="img-fluid ib-media-thumb" alt="">
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if not is_content_focused %}
+                    <div class="card-footer py-2 px-3">
+                        <div class="d-flex justify-content-between ib-stat">
+                            <span>{{ tweet.likeCount }} likes</span>
+                            <span>{{ tweet.retweetCount }} RT</span>
+                            <span>{{ tweet.replyCount }} replies</span>
+                            <span>{{ tweet.viewCount }} views</span>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mt-3 d-flex justify-content-center">
+            <nav>
+                <ul class="pagination pagination-sm">
+                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Prev</a>
+                    </li>
+                    <li class="page-item disabled"><span class="page-link">{{ page }}/{{ total_pages }}</span></li>
+                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+{% elif not datasets %}
+<div class="alert alert-warning">No datasets found. <a href="/scrape">Scrape some data</a> first.</div>
+{% else %}
+<div class="alert alert-info">Select a dataset above.</div>
+{% endif %}
 {% endblock %}

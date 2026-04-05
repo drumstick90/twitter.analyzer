@@ -2,17 +2,18 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8 col-lg-6 col-xl-5">
+    <div class="col-md-7 col-lg-5">
+        <div class="ib-page-head">
+            <h1>24h scrape</h1>
+            <p>Pull last 24 hours of tweets for multiple accounts.</p>
+        </div>
+
         <div class="card">
-            <div class="card-header">
-                <h3>24h Scrape</h3>
-            </div>
             <div class="card-body">
-                <p class="text-muted">Scrape tweets and replies from multiple accounts for the past 24 hours. All data accrues into one dataset (<code>24h_accrued</code>) for content exploration in Browse.</p>
                 <form action="/scrape-24h" method="post">
                     <div class="mb-3">
-                        <label for="usernames" class="form-label">Twitter Usernames (one per line, without @)</label>
-                        <textarea class="form-control" id="usernames" name="usernames" rows="8" required>nntaleb
+                        <label for="usernames" class="form-label">Usernames (one per line)</label>
+                        <textarea class="form-control" id="usernames" name="usernames" rows="7" required>nntaleb
 KobeissiLetter
 INArteCarloDoss
 DeepDishEnjoyer
@@ -20,46 +21,25 @@ Fongern_FX
 clkleinmonaco</textarea>
                     </div>
 
-                    <div class="mb-3 form-check">
+                    <div class="form-check mb-3">
                         <input type="checkbox" class="form-check-input" id="include_thread_context" name="include_thread_context" value="on">
-                        <label class="form-check-label" for="include_thread_context">Include thread context (fetch parent tweets for replies)</label>
+                        <label class="form-check-label" for="include_thread_context">Fetch parent tweets for replies</label>
                     </div>
 
-                    <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary">Start 24h Scrape</button>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Start</button>
                     </div>
                 </form>
             </div>
         </div>
 
         {% if credits %}
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="mb-0">TwitterAPI.io Credits</h5>
-            </div>
-            <div class="card-body">
-                <table class="table table-sm table-borderless mb-0">
-                    <tbody>
-                        <tr>
-                            <td class="text-muted">Recharge credits</td>
-                            <td class="fw-semibold">{{ "{:,}".format(credits.recharge_credits) }}</td>
-                        </tr>
-                        <tr>
-                            <td class="text-muted">Bonus credits</td>
-                            <td class="fw-semibold">{{ "{:,}".format(credits.bonus_credits) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p class="text-muted small mb-0 mt-2">
-                    <strong>Rough residual capacity:</strong> ~{{ "{:,}".format(credits.tweets_capacity) }} tweets
-                    (15 credits/tweet). Profiles: 18 credits each. Followers: 15 each.
-                </p>
-            </div>
-        </div>
-        {% elif credits is none %}
-        <div class="card mt-4 border-warning">
-            <div class="card-body text-muted small">
-                Could not fetch credit balance (API key missing or request failed).
+        <div class="card mt-3">
+            <div class="card-body small">
+                <span class="text-muted">Credits:</span>
+                <strong>{{ "{:,}".format(credits.recharge_credits) }}</strong> recharge,
+                <strong>{{ "{:,}".format(credits.bonus_credits) }}</strong> bonus
+                <span class="text-muted ms-1">(~{{ "{:,}".format(credits.tweets_capacity) }} tweets)</span>
             </div>
         </div>
         {% endif %}

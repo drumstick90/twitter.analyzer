@@ -144,7 +144,11 @@ async def auth_redirect_handler(request: Request, exc: HTTPException):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, auth: bool = Depends(verify_auth)):
-    return templates.TemplateResponse("index.html", {"request": request})
+    api_key = os.getenv("TWITTERAPI_KEY")
+    credits = fetch_twitterapi_credits(api_key) if api_key else None
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "credits": credits}
+    )
 
 @app.get("/scrape", response_class=HTMLResponse)
 async def scrape_form(request: Request, auth: bool = Depends(verify_auth)):
