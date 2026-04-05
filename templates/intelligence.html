@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script>window.INTEL_DATASET = {{ current_dataset | tojson }};</script>
+<div class="ib-page-head">
+    <h1>Intelligence</h1>
+    <p>Map concepts and ask questions about a tweet dataset using Claude AI.</p>
+</div>
+
+{# ---- Dataset selector ---- #}
+<div class="card mb-3 ib-accent-dark">
+    <div class="card-body">
+        <form action="/intelligence" method="get" class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Dataset</label>
+                <select class="form-select" name="dataset_redirect" onchange="window.location='/intelligence/'+this.value">
+                    <option value="">Select…</option>
+                    {% for ds in datasets %}
+                    <option value="{{ ds }}" {% if current_dataset == ds %}selected{% endif %}>{{ ds }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if current_dataset %}
+            <div class="col-auto">
+                <span class="ib-num text-muted small">
+                    {{ tweet_count }} tweets · ~{{ "{:,}".format(token_estimate) }} tokens
+                    {% if token_estimate > 180000 %}
+                    <span class="badge bg-warning ms-1">⚠ near limit</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="col" style="min-width:0">
+                <div id="ib-intel-log" class="ib-intel-log" aria-live="polite">
+                    <div class="ib-intel-log-head">log</div>
+                    <div id="ib-intel-log-body" class="ib-intel-log-body"></div>
+                </div>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if current_dataset %}
+
+{# ---- Two-column layout ---- #}
+<div class="row g-3">
+
+    {# ---- LEFT: Knowledge Map ---- #}
+    <div class="col-lg-7">
+        <div class="card ib-accent-warn h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="ib-section-label mb-0">Knowledge Map</span>
+                <div class="d-flex gap-2 align-items-center">
+                    {% if map_cached and concept_map and concept_map._meta %}
+                    <span class="text-muted small ib-num">{{ concept_map._meta.generated_at[:10] }}</span>
+                    {% endif %}
+                    <button id="btn-map" class="ib-tab" onclick="generateMap()">
+                        {% if map_cached %}Regenerate{% else %}Map Concepts{% endif %}
+                    </button>
+                </div>
+            </div>
+            <div class="card-body" id="map-panel">
+                {% if concept_map %}
+                    {# Render summary #}
+                    {% if concept_map.summary %}
+                    <p class="ib-map-summary">{{ concept_map.summary }}</p>
+                    {% endif %}
+
+                    {# Render tree #}
+                    <div class="ib-tree">
+                    {% for theme in concept_map.themes %}
+                        <details class="ib-tree-node ib-tree-root" open>
+                            <summary class="ib-tree-label">
+                                <span class="ib-tree-name">{{ theme.name }}</span>
+                            </summary>
+                            {% if theme.description %}
+                            <p class="ib-tree-desc">{{ theme.description }}</p>
+                            {% endif %}
+                            {% if theme.subtopics %}
+                            <div class="ib-tree-children">
+                                {% for sub in theme.subtopics %}
+                                <details class="ib-tree-node">
+                                    <summary class="ib-tree-label">
+                                        <span class="ib-tree-name">{{ sub.name }}</span>
+                                    </summary>
+                                    {% if sub.description %}
+                                    <p class="ib-tree-desc">{{ sub.description }}</p>
+                                    {% endif %}
+                                    {% if sub.subtopics %}
+                                    <div class="ib-tree-children">
+                                        {% for leaf in sub.subtopics %}
+                                        <details class="ib-tree-node">
+                                            <summary class="ib-tree-label">
+                                                <span class="ib-tree-name">{{ leaf.name }}</span>
+                                            </summary>
+                                            {% if leaf.description %}
+                                            <p class="ib-tree-desc">{{ leaf.description }}</p>
+                                            {% endif %}
+                                        </details>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </details>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </details>
+                    {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="ib-map-empty">
+                        <p class="text-muted">No map yet. Click <strong>Map Concepts</strong> to analyse this dataset with Claude.</p>
+                        <p class="text-muted small">This is a one-time call (~30s). Result is cached on disk.</p>
+                    </div>
+                {% endif %}
+            </div>
+            <div id="map-loading" class="ib-map-loading d-none">
+                <div class="ib-map-spinner"></div>
+                <span>Analysing with Claude Sonnet…</span>
+            </div>
+        </div>
+    </div>
+
+    {# ---- RIGHT: Q&A ---- #}
+    <div class="col-lg-5">
+        <div class="card ib-accent-dark h-100 d-flex flex-column">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="ib-section-label mb-0">Ask the Dataset</span>
+                <span class="text-muted small ib-num">Claude Haiku · prompt cached</span>
+            </div>
+
+            <div class="card-body d-flex flex-column" style="min-height:0">
+                <div id="qa-history" class="ib-qa-history"></div>
+
+                <div class="ib-qa-input-wrap mt-auto">
+                    <textarea
+                        id="qa-input"
+                        class="form-control ib-qa-input"
+                        placeholder="Ask anything about this dataset…"
+                        rows="3"
+                        onkeydown="handleQAKey(event)"
+                    ></textarea>
+                    <button class="btn btn-primary w-100 mt-2" onclick="sendQuestion()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /row -->
+
+<script>
+const DATASET = window.INTEL_DATASET;
+
+// ---- Concept Map ----
+async function generateMap() {
+    const btn = document.getElementById('btn-map');
+    const panel = document.getElementById('map-panel');
+    const loading = document.getElementById('map-loading');
+
+    btn.style.opacity = '.4';
+    btn.disabled = true;
+    panel.classList.add('d-none');
+    loading.classList.remove('d-none');
+
+    try {
+        const res = await fetch(`/intelligence/${DATASET}/concept-map`, { method: 'POST' });
+        if (!res.ok) {
+            const err = await res.json();
+            alert('Error: ' + (err.detail || 'unknown'));
+            return;
+        }
+        // Reload the page to re-render the tree from server
+        window.location.reload();
+    } catch (e) {
+        alert('Network error: ' + e.message);
+        btn.style.opacity = '';
+        btn.disabled = false;
+        panel.classList.remove('d-none');
+        loading.classList.add('d-none');
+    }
+}
+
+// ---- Q&A ----
+function handleQAKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuestion();
+    }
+}
+
+async function sendQuestion() {
+    const input = document.getElementById('qa-input');
+    const history = document.getElementById('qa-history');
+    const question = input.value.trim();
+    if (!question) return;
+
+    input.value = '';
+    input.disabled = true;
+
+    // Append user bubble
+    const userEl = document.createElement('div');
+    userEl.className = 'ib-qa-bubble ib-qa-user';
+    userEl.textContent = question;
+    history.appendChild(userEl);
+
+    // Append assistant bubble (streaming target)
+    const assistEl = document.createElement('div');
+    assistEl.className = 'ib-qa-bubble ib-qa-assistant';
+    assistEl.innerHTML = '<span class="ib-qa-cursor">▌</span>';
+    history.appendChild(assistEl);
+    history.scrollTop = history.scrollHeight;
+
+    let text = '';
+
+    try {
+        const res = await fetch(`/intelligence/${DATASET}/ask`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ question }),
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+
+            const lines = buf.split('\n');
+            buf = lines.pop();
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const raw = line.slice(6);
+                if (raw === '[DONE]') break;
+                try {
+                    const payload = JSON.parse(raw);
+                    if (payload.error) {
+                        text += `\n[Error: ${payload.error}]`;
+                    } else {
+                        text += payload.text || '';
+                    }
+                    assistEl.innerHTML = renderText(text) + '<span class="ib-qa-cursor">▌</span>';
+                    history.scrollTop = history.scrollHeight;
+                } catch {}
+            }
+        }
+    } catch (e) {
+        text += `\n[Network error: ${e.message}]`;
+    }
+
+    assistEl.innerHTML = renderText(text);
+    input.disabled = false;
+    input.focus();
+    history.scrollTop = history.scrollHeight;
+}
+
+function renderText(t) {
+    // Minimal markdown: bold, newlines → <br>
+    return t
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/`(.+?)`/g,'<code>$1</code>')
+        .replace(/\n/g,'<br>');
+}
+</script>
+
+{% else %}
+<div class="alert alert-info">Select a dataset above to get started.</div>
+{% endif %}
+
+<script>
+(function () {
+    const ds = window.INTEL_DATASET;
+    let lastSeq = 0;
+    const body = document.getElementById('ib-intel-log-body');
+    function poll() {
+        const u = new URL('/intelligence/logs', window.location.origin);
+        u.searchParams.set('since', String(lastSeq));
+        if (ds) u.searchParams.set('dataset', ds);
+        fetch(u, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                (d.entries || []).forEach(function (e) {
+                    lastSeq = Math.max(lastSeq, e.seq);
+                    var line = document.createElement('div');
+                    line.className = 'ib-intel-log-line';
+                    line.textContent = '[' + e.ts + '] ' + e.msg;
+                    body.appendChild(line);
+                    while (body.children.length > 160) body.removeChild(body.firstChild);
+                });
+                body.scrollTop = body.scrollHeight;
+            })
+            .catch(function () {});
+    }
+    poll();
+    setInterval(poll, 1200);
+})();
+</script>
+{% endblock %}

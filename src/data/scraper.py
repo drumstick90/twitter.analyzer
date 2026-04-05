@@ -46,6 +46,8 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
     delay_between_requests = 1
     consecutive_empty_pages = 0
     max_consecutive_empty = 3
+    consecutive_duplicate_only_pages = 0
+    max_consecutive_duplicate_only = 8
     seen_ids = set()
 
     while has_next_page:
@@ -91,7 +93,7 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
                 for t in tweets_on_page:
                     if not isinstance(t, dict):
                         continue
-                    tid = t.get("id")
+                    tid = t.get("id") or t.get("id_str")
                     if tid is None:
                         continue
                     sid = str(tid)
@@ -101,12 +103,37 @@ def _paginate_advanced_search(api_key, search_query, project_dir, file_stem_pref
                     new_tweets.append(t)
 
                 if len(new_tweets) == 0:
+                    # Overlap-only page: do not stop until cursor cannot advance, or too many
+                    # consecutive overlap pages (API stuck). Earlier bug: we stopped here and never
+                    # advanced the cursor, so months with >1 page of results were truncated.
+                    consecutive_duplicate_only_pages += 1
+                    next_cursor = response_data.get("next_cursor", "")
                     print(
-                        "🔚 Stopping: this page repeated only tweets we already have "
-                        f"({len(tweets_on_page)} rows, 0 new ids). API cursor was looping."
+                        f"⚠️  No new tweet ids on this page ({len(tweets_on_page)} rows all already seen). "
+                        f"Overlap pass {consecutive_duplicate_only_pages}/{max_consecutive_duplicate_only}."
                     )
-                    has_next_page = False
+                    if next_cursor and next_cursor != cursor:
+                        cursor = next_cursor
+                        print(f"🔗 Advancing cursor anyway; fetching next window...")
+                        if consecutive_duplicate_only_pages >= max_consecutive_duplicate_only:
+                            print(
+                                "🔚 Stopping: too many consecutive overlap-only pages "
+                                f"({max_consecutive_duplicate_only}). Possible API loop."
+                            )
+                            has_next_page = False
+                        else:
+                            print(
+                                f"⏳ Waiting {delay_between_requests} seconds before next request..."
+                            )
+                            time.sleep(delay_between_requests)
+                    else:
+                        print(
+                            "🔚 Stopping: overlap-only page and cursor empty or unchanged "
+                            "(no further pages)."
+                        )
+                        has_next_page = False
                 else:
+                    consecutive_duplicate_only_pages = 0
                     if len(new_tweets) < len(tweets_on_page):
                         print(
                             f"   ({len(new_tweets)} new, "

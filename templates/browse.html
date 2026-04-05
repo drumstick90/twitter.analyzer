@@ -3,7 +3,7 @@
 {% block content %}
 <div class="ib-page-head"><h1>Browse</h1></div>
 
-<div class="card mb-3">
+<div class="card mb-3 ib-accent-dark">
     <div class="card-body">
         <form action="/browse" method="get" class="row g-2 align-items-end">
             <div class="col-md-3">
@@ -16,6 +16,8 @@
                 </select>
             </div>
             {% if current_dataset %}
+            <input type="hidden" name="view_mode" value="{{ view_mode }}">
+            <input type="hidden" name="tweet_kind" value="{{ tweet_kind }}">
             <div class="col-md-3">
                 <label for="search" class="form-label">Search</label>
                 <input type="text" class="form-control" id="search" name="search" value="{{ search_query }}" placeholder="Keywords…">
@@ -54,13 +56,15 @@
 {% if current_dataset %}
 <div class="row">
     <div class="col-md-3 mb-3">
-        <div class="card">
-            <div class="card-header">Mentions</div>
+        <div class="card ib-accent-red">
+            <div class="card-header">
+                <span class="ib-section-label mb-0" style="margin-bottom:0">Top Mentions</span>
+            </div>
             <ul class="list-group list-group-flush">
                 {% for user, count in top_mentions %}
                 <li class="list-group-item d-flex justify-content-between align-items-center py-1">
                     <a href="https://twitter.com/{{ user }}" target="_blank" rel="noopener" class="text-decoration-none small">@{{ user }}</a>
-                    <span class="badge bg-secondary rounded-pill">{{ count }}</span>
+                    <span class="badge bg-secondary ib-num">{{ count }}</span>
                 </li>
                 {% endfor %}
                 {% if not top_mentions %}
@@ -72,26 +76,134 @@
 
     <div class="col-md-9">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-            <span class="text-muted small">{{ total_tweets }} tweets · page {{ page }}/{{ total_pages }}</span>
+            <span class="ib-num text-muted small">
+                {{ total_tweets }} tweets
+                {% if view_mode == 'board' %}
+                · {{ month_count }} months
+                {% else %}
+                · page {{ page }}/{{ total_pages }}
+                {% endif %}
+            </span>
             {% if is_content_focused %}
-            <div>
-                <a href="/24h_accrued/export?format=text{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary">Export text</a>
-                <a href="/24h_accrued/export?format=json{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="btn btn-sm btn-outline-secondary">Export JSON</a>
+            <div class="ib-tab-group">
+                <a href="/24h_accrued/export?format=text{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="ib-tab">Export text</a>
+                <a href="/24h_accrued/export?format=json{% if author_filter %}&author={{ author_filter }}{% endif %}" target="_blank" class="ib-tab">Export JSON</a>
             </div>
             {% endif %}
-            <nav>
-                <ul class="pagination pagination-sm mb-0">
-                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Prev</a>
-                    </li>
-                    <li class="page-item disabled"><span class="page-link">{{ page }}/{{ total_pages }}</span></li>
-                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
-                    </li>
-                </ul>
-            </nav>
+            <div class="ib-tab-group">
+                <a class="ib-tab {% if tweet_kind == 'all' %}active{% endif %}" href="/browse?dataset={{ current_dataset }}&view_mode={{ view_mode }}&tweet_kind=all&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">All</a>
+                <a class="ib-tab {% if tweet_kind == 'originals' %}active{% endif %}" href="/browse?dataset={{ current_dataset }}&view_mode={{ view_mode }}&tweet_kind=originals&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Originals</a>
+                <a class="ib-tab {% if tweet_kind == 'replies' %}active{% endif %}" href="/browse?dataset={{ current_dataset }}&view_mode={{ view_mode }}&tweet_kind=replies&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Replies</a>
+            </div>
+            <div class="ib-tab-group">
+                <a class="ib-tab {% if view_mode == 'cards' %}active{% endif %}" href="/browse?dataset={{ current_dataset }}&view_mode=cards&tweet_kind={{ tweet_kind }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Cards</a>
+                <a class="ib-tab {% if view_mode == 'board' %}active{% endif %}" href="/browse?dataset={{ current_dataset }}&view_mode=board&tweet_kind={{ tweet_kind }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Board</a>
+            </div>
         </div>
 
+        {% if view_mode == 'board' %}
+        <div class="ib-board-layout">
+            <div class="ib-month-board">
+                {% for month in tweet_months %}
+                <section class="card ib-month-panel ib-accent-warn">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>{{ month.label }}</span>
+                        <span class="badge bg-warning ib-num">{{ month.count }}</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="ib-postit-grid">
+                            {% for tweet in month.tweets %}
+                            <button
+                                type="button"
+                                class="ib-postit ib-postit-{{ loop.cycle('a', 'b', 'c', 'd') }}"
+                                data-tweet-id="{{ tweet.id }}"
+                                data-tweet-url="https://twitter.com/i/web/status/{{ tweet.id }}"
+                                data-tweet-author="@{{ tweet.author }}"
+                                data-tweet-date="{{ tweet.created_at_formatted }}"
+                                data-tweet-text="{{ tweet.text }}"
+                                data-tweet-likes="{{ tweet.likeCount }}"
+                                data-tweet-retweets="{{ tweet.retweetCount }}"
+                                data-tweet-replies="{{ tweet.replyCount }}"
+                                data-tweet-views="{{ tweet.viewCount }}"
+                                data-tweet-parent-author="{% if tweet.parent_display %}@{{ tweet.parent_display.author }}{% endif %}"
+                                data-tweet-parent-url="{% if tweet.parent_display %}https://twitter.com/i/web/status/{{ tweet.parent_display.id }}{% endif %}"
+                                data-tweet-parent-text="{% if tweet.parent_display %}{{ tweet.parent_display.text }}{% endif %}"
+                                data-tweet-media-url="{% if tweet.media_url %}{{ tweet.media_url }}{% endif %}"
+                            >
+                                <div class="ib-postit-top">
+                                    <span class="ib-postit-day ib-num">{{ tweet.day_label }}</span>
+                                    <span class="ib-postit-author">@{{ tweet.author }}</span>
+                                </div>
+                                <p class="ib-postit-text">{{ tweet.text_short }}</p>
+                                <div class="ib-postit-meta">
+                                    <span class="ib-num">♥ {{ tweet.likeCount }}</span>
+                                    <span class="ib-num">RT {{ tweet.retweetCount }}</span>
+                                </div>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </section>
+                {% endfor %}
+                {% if not tweet_months %}
+                <div class="alert alert-info mb-0">No tweets match the current filters.</div>
+                {% endif %}
+            </div>
+
+            {% if tweet_months %}
+            {% set selected_tweet = tweet_months[0].tweets[0] %}
+            <aside class="card ib-board-detail ib-accent-dark" id="ib-board-detail">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Tweet Detail</span>
+                    <a
+                        id="ib-detail-link"
+                        href="https://twitter.com/i/web/status/{{ selected_tweet.id }}"
+                        target="_blank"
+                        rel="noopener"
+                        class="ib-tab"
+                    >Open</a>
+                </div>
+                <div class="card-body">
+                    <div class="ib-detail-meta">
+                        <strong id="ib-detail-author">{{ "@" ~ selected_tweet.author }}</strong>
+                        <span id="ib-detail-date" class="text-muted small">{{ selected_tweet.created_at_formatted }}</span>
+                    </div>
+                    <div id="ib-detail-parent" class="ib-detail-parent{% if not selected_tweet.parent_display %} d-none{% endif %}">
+                        <div class="ib-section-label">In Reply To</div>
+                        <p class="mb-2">
+                            <a id="ib-detail-parent-link" href="{% if selected_tweet.parent_display %}https://twitter.com/i/web/status/{{ selected_tweet.parent_display.id }}{% else %}#{% endif %}" target="_blank" rel="noopener">
+                                <span id="ib-detail-parent-author">{% if selected_tweet.parent_display %}@{{ selected_tweet.parent_display.author }}{% endif %}</span>
+                            </a>
+                        </p>
+                        <p id="ib-detail-parent-text" class="ib-parent-snippet mb-0">{% if selected_tweet.parent_display %}{{ selected_tweet.parent_display.text }}{% endif %}</p>
+                    </div>
+                    <p id="ib-detail-text" class="ib-detail-text">{{ selected_tweet.text }}</p>
+                    <div id="ib-detail-media-wrap" class="{% if not selected_tweet.media_url %}d-none{% endif %}">
+                        <img id="ib-detail-media" src="{% if selected_tweet.media_url %}{{ selected_tweet.media_url }}{% endif %}" class="img-fluid ib-media-thumb" alt="">
+                    </div>
+                </div>
+                <div class="ib-stat-bar">
+                    <div>
+                        <div class="si-label">Likes</div>
+                        <div id="ib-detail-likes" class="si-value">{{ selected_tweet.likeCount }}</div>
+                    </div>
+                    <div>
+                        <div class="si-label">RT</div>
+                        <div id="ib-detail-retweets" class="si-value">{{ selected_tweet.retweetCount }}</div>
+                    </div>
+                    <div>
+                        <div class="si-label">Replies</div>
+                        <div id="ib-detail-replies" class="si-value">{{ selected_tweet.replyCount }}</div>
+                    </div>
+                    <div>
+                        <div class="si-label">Views</div>
+                        <div id="ib-detail-views" class="si-value">{{ selected_tweet.viewCount }}</div>
+                    </div>
+                </div>
+            </aside>
+            {% endif %}
+        </div>
+        {% else %}
         <div class="row row-cols-1 row-cols-lg-2 g-3">
             {% for tweet in tweets %}
             <div class="col">
@@ -118,12 +230,22 @@
                         {% endif %}
                     </div>
                     {% if not is_content_focused %}
-                    <div class="card-footer py-2 px-3">
-                        <div class="d-flex justify-content-between ib-stat">
-                            <span>{{ tweet.likeCount }} likes</span>
-                            <span>{{ tweet.retweetCount }} RT</span>
-                            <span>{{ tweet.replyCount }} replies</span>
-                            <span>{{ tweet.viewCount }} views</span>
+                    <div class="ib-stat-bar" style="padding:10px 14px;gap:12px">
+                        <div>
+                            <div class="si-label">Likes</div>
+                            <div class="si-value" style="font-size:.875rem">{{ tweet.likeCount }}</div>
+                        </div>
+                        <div>
+                            <div class="si-label">RT</div>
+                            <div class="si-value" style="font-size:.875rem">{{ tweet.retweetCount }}</div>
+                        </div>
+                        <div>
+                            <div class="si-label">Replies</div>
+                            <div class="si-value" style="font-size:.875rem">{{ tweet.replyCount }}</div>
+                        </div>
+                        <div>
+                            <div class="si-label">Views</div>
+                            <div class="si-value" style="font-size:.875rem">{{ tweet.viewCount }}</div>
                         </div>
                     </div>
                     {% endif %}
@@ -133,18 +255,21 @@
         </div>
 
         <div class="mt-3 d-flex justify-content-center">
-            <nav>
-                <ul class="pagination pagination-sm">
-                    <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Prev</a>
-                    </li>
-                    <li class="page-item disabled"><span class="page-link">{{ page }}/{{ total_pages }}</span></li>
-                    <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                        <a class="page-link" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next</a>
-                    </li>
-                </ul>
-            </nav>
+            <div class="ib-tab-group">
+                {% if page <= 1 %}
+                <span class="ib-tab" style="opacity:.35;cursor:default">← Prev</span>
+                {% else %}
+                <a class="ib-tab" href="/browse?dataset={{ current_dataset }}&page={{ page - 1 }}&view_mode={{ view_mode }}&tweet_kind={{ tweet_kind }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">← Prev</a>
+                {% endif %}
+                <span class="ib-tab active">{{ page }}/{{ total_pages }}</span>
+                {% if page >= total_pages %}
+                <span class="ib-tab" style="opacity:.35;cursor:default">Next →</span>
+                {% else %}
+                <a class="ib-tab" href="/browse?dataset={{ current_dataset }}&page={{ page + 1 }}&view_mode={{ view_mode }}&tweet_kind={{ tweet_kind }}&search={{ search_query }}&author_filter={{ author_filter }}&sort_by={{ sort_by }}">Next →</a>
+                {% endif %}
+            </div>
         </div>
+        {% endif %}
     </div>
 </div>
 
@@ -152,5 +277,69 @@
 <div class="alert alert-warning">No datasets found. <a href="/scrape">Scrape some data</a> first.</div>
 {% else %}
 <div class="alert alert-info">Select a dataset above.</div>
+{% endif %}
+
+{% if current_dataset and view_mode == 'board' and tweet_months %}
+<script>
+(() => {
+    const detail = document.getElementById('ib-board-detail');
+    if (!detail) return;
+
+    const authorEl = document.getElementById('ib-detail-author');
+    const dateEl = document.getElementById('ib-detail-date');
+    const textEl = document.getElementById('ib-detail-text');
+    const linkEl = document.getElementById('ib-detail-link');
+    const likesEl = document.getElementById('ib-detail-likes');
+    const retweetsEl = document.getElementById('ib-detail-retweets');
+    const repliesEl = document.getElementById('ib-detail-replies');
+    const viewsEl = document.getElementById('ib-detail-views');
+    const mediaWrapEl = document.getElementById('ib-detail-media-wrap');
+    const mediaEl = document.getElementById('ib-detail-media');
+    const parentWrapEl = document.getElementById('ib-detail-parent');
+    const parentAuthorEl = document.getElementById('ib-detail-parent-author');
+    const parentTextEl = document.getElementById('ib-detail-parent-text');
+    const parentLinkEl = document.getElementById('ib-detail-parent-link');
+    const noteButtons = document.querySelectorAll('.ib-postit');
+
+    function setSelected(button) {
+        noteButtons.forEach((note) => note.classList.remove('is-selected'));
+        button.classList.add('is-selected');
+
+        authorEl.textContent = button.dataset.tweetAuthor || '';
+        dateEl.textContent = button.dataset.tweetDate || '';
+        textEl.textContent = button.dataset.tweetText || '';
+        linkEl.href = button.dataset.tweetUrl || '#';
+        likesEl.textContent = button.dataset.tweetLikes || '0';
+        retweetsEl.textContent = button.dataset.tweetRetweets || '0';
+        repliesEl.textContent = button.dataset.tweetReplies || '0';
+        viewsEl.textContent = button.dataset.tweetViews || '0';
+
+        if (button.dataset.tweetMediaUrl) {
+            mediaEl.src = button.dataset.tweetMediaUrl;
+            mediaWrapEl.classList.remove('d-none');
+        } else {
+            mediaEl.removeAttribute('src');
+            mediaWrapEl.classList.add('d-none');
+        }
+
+        if (button.dataset.tweetParentText) {
+            parentAuthorEl.textContent = button.dataset.tweetParentAuthor || '';
+            parentTextEl.textContent = button.dataset.tweetParentText || '';
+            parentLinkEl.href = button.dataset.tweetParentUrl || '#';
+            parentWrapEl.classList.remove('d-none');
+        } else {
+            parentAuthorEl.textContent = '';
+            parentTextEl.textContent = '';
+            parentLinkEl.href = '#';
+            parentWrapEl.classList.add('d-none');
+        }
+    }
+
+    noteButtons.forEach((button, index) => {
+        if (index === 0) button.classList.add('is-selected');
+        button.addEventListener('click', () => setSelected(button));
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}

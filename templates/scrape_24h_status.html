@@ -22,8 +22,8 @@
         {% endif %}
 
         {% if results and results|length > 0 %}
-        <div class="card mb-3">
-            <div class="card-header">Results</div>
+        <div class="card mb-3 ib-accent-green">
+            <div class="card-header"><span class="ib-section-label mb-0" style="margin-bottom:0">Results</span></div>
             <ul class="list-group list-group-flush">
                 {% for r in results %}
                 <li class="list-group-item d-flex justify-content-between align-items-center py-1">
@@ -48,9 +48,9 @@
         </div>
         {% endif %}
 
-        <div class="card">
+        <div class="card ib-accent-dark">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <span>Log</span>
+                <span class="ib-section-label mb-0" style="margin-bottom:0">Log</span>
                 {% if status == 'running' %}<span class="badge bg-success">live</span>{% endif %}
             </div>
             <div class="card-body p-0">

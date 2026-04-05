@@ -5,7 +5,7 @@ import html
 import secrets
 from collections import Counter
 from fastapi import FastAPI, Request, Form, BackgroundTasks, Query, Depends, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response, PlainTextResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, PlainTextResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -32,6 +32,15 @@ from src.data.scraper import (
     scrape_multi_user_24h,
 )
 from src.data.loader import load_json_tweets, get_available_datasets, load_csv_data, load_conversation_parents
+from src.intelligence.claude_chat import (
+    serialize_dataset,
+    estimate_tokens,
+    generate_concept_map,
+    concept_map_exists,
+    load_concept_map,
+    stream_question,
+)
+from src.intelligence.intel_log import log as intel_log, fetch_since
 from src.analysis.growth import GrowthAnalyzer
 from src.analysis.temporal import TemporalAnalyzer
 from src.analysis.likes import LikesAnalyzer
@@ -536,16 +545,25 @@ async def browse_tweets(
     search: Optional[str] = Query(None),
     author_filter: Optional[str] = Query(None),
     sort_by: str = Query("date_desc"),
+    tweet_kind: str = Query("all"),
+    view_mode: str = Query("cards"),
     auth: bool = Depends(verify_auth)
 ):
     datasets = get_available_datasets()
     tweets_display = []
+    tweet_months = []
     total_tweets = 0
     total_pages = 1
     per_page = 50
     top_mentions = []
     authors = []
     is_content_focused = False
+    month_count = 0
+
+    if view_mode not in {"cards", "board"}:
+        view_mode = "cards"
+    if tweet_kind not in {"all", "originals", "replies"}:
+        tweet_kind = "all"
 
     parents = {}
     if dataset:
@@ -567,6 +585,13 @@ async def browse_tweets(
             if author_filter and is_content_focused:
                 author_lower = author_filter.lower()
                 all_tweets = [t for t in all_tweets if (t.get('author') or {}).get('userName', '').lower() == author_lower]
+
+            if tweet_kind != "all":
+                all_tweets = [
+                    t for t in all_tweets
+                    if (((t.get('isReply', False) or bool(t.get('inReplyToId'))) and tweet_kind == "replies")
+                        or (not (t.get('isReply', False) or bool(t.get('inReplyToId'))) and tweet_kind == "originals"))
+                ]
             
             # Calculate Mentions (on the filtered dataset)
             mention_counter = Counter()
@@ -656,12 +681,55 @@ async def browse_tweets(
             elif sort_by == 'retweets_desc':
                 processed_tweets.sort(key=lambda x: x['retweetCount'], reverse=True)
 
-            # Pagination
             total_tweets = len(processed_tweets)
-            total_pages = math.ceil(total_tweets / per_page)
-            start_idx = (page - 1) * per_page
-            end_idx = start_idx + per_page
-            tweets_display = processed_tweets[start_idx:end_idx]
+
+            if view_mode == "board":
+                month_groups = {}
+                for tweet in processed_tweets:
+                    dt = tweet["created_at"]
+                    if dt:
+                        month_key = dt.strftime("%Y-%m")
+                        month_sort = datetime(dt.year, dt.month, 1)
+                        month_label = dt.strftime("%b %Y").upper()
+                        day_label = dt.strftime("%d")
+                    else:
+                        month_key = "unknown"
+                        month_sort = None
+                        month_label = "UNKNOWN"
+                        day_label = "??"
+
+                    if month_key not in month_groups:
+                        month_groups[month_key] = {
+                            "key": month_key,
+                            "label": month_label,
+                            "month_sort": month_sort,
+                            "tweets": []
+                        }
+
+                    tweet_copy = dict(tweet)
+                    tweet_copy["day_label"] = day_label
+                    tweet_copy["text_short"] = (
+                        tweet["text"][:140].rstrip() + "..."
+                        if len(tweet["text"]) > 140 else tweet["text"]
+                    )
+                    month_groups[month_key]["tweets"].append(tweet_copy)
+
+                tweet_months = sorted(
+                    month_groups.values(),
+                    key=lambda group: (group["month_sort"] is not None, group["month_sort"] or datetime.min),
+                    reverse=True
+                )
+                for group in tweet_months:
+                    group["count"] = len(group["tweets"])
+
+                month_count = len(tweet_months)
+                tweets_display = []
+                total_pages = 1
+            else:
+                total_pages = max(1, math.ceil(total_tweets / per_page))
+                start_idx = (page - 1) * per_page
+                end_idx = start_idx + per_page
+                tweets_display = processed_tweets[start_idx:end_idx]
 
         except Exception as e:
             print(f"Error browsing dataset: {e}")
@@ -678,9 +746,13 @@ async def browse_tweets(
         "search_query": search or "",
         "author_filter": author_filter or "",
         "sort_by": sort_by,
+        "tweet_kind": tweet_kind,
+        "view_mode": view_mode,
         "top_mentions": top_mentions,
         "authors": authors,
-        "is_content_focused": is_content_focused
+        "is_content_focused": is_content_focused,
+        "tweet_months": tweet_months,
+        "month_count": month_count
     })
 
 # --- LLM EXPORT (24h accrued) ---
@@ -866,6 +938,106 @@ async def ping_stop(request: Request, auth: bool = Depends(verify_auth)):
     if current_ping_task["status"] == "running":
         scraper_state.stop()
     return RedirectResponse(url="/ping/result", status_code=303)
+
+# --- INTELLIGENCE (Claude Q&A + Concept Map) ---
+
+@app.get("/intelligence/logs")
+async def intelligence_logs(
+    request: Request,
+    since: int = Query(0, ge=0),
+    dataset: Optional[str] = Query(None),
+    auth: bool = Depends(verify_auth),
+):
+    """Incremental log tail for the Intelligence live panel."""
+    entries, max_seq = fetch_since(since, dataset)
+    return JSONResponse({"entries": entries, "max_seq": max_seq})
+
+
+@app.get("/intelligence", response_class=HTMLResponse)
+async def intelligence_home(request: Request, auth: bool = Depends(verify_auth)):
+    datasets = get_available_datasets()
+    return templates.TemplateResponse("intelligence.html", {
+        "request": request,
+        "datasets": datasets,
+        "current_dataset": None,
+        "concept_map": None,
+        "tweet_count": 0,
+        "token_estimate": 0,
+        "map_cached": False,
+    })
+
+
+@app.get("/intelligence/{dataset}", response_class=HTMLResponse)
+async def intelligence_dataset(
+    request: Request,
+    dataset: str,
+    auth: bool = Depends(verify_auth),
+):
+    datasets = get_available_datasets()
+    dataset_path = os.path.join("datasets", dataset)
+    if not os.path.isdir(dataset_path):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    _, tweet_count = serialize_dataset(dataset_path)
+    corpus_text, _ = serialize_dataset(dataset_path)
+    token_estimate = estimate_tokens(corpus_text)
+    map_cached = concept_map_exists(dataset_path)
+    concept_map = load_concept_map(dataset_path) if map_cached else None
+
+    return templates.TemplateResponse("intelligence.html", {
+        "request": request,
+        "datasets": datasets,
+        "current_dataset": dataset,
+        "concept_map": concept_map,
+        "tweet_count": tweet_count,
+        "token_estimate": token_estimate,
+        "map_cached": map_cached,
+    })
+
+
+@app.post("/intelligence/{dataset}/concept-map")
+async def build_concept_map(
+    request: Request,
+    dataset: str,
+    auth: bool = Depends(verify_auth),
+):
+    dataset_path = os.path.join("datasets", dataset)
+    if not os.path.isdir(dataset_path):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    try:
+        concept_map = generate_concept_map(dataset_path, dataset)
+        return JSONResponse({"ok": True, "concept_map": concept_map})
+    except Exception as e:
+        intel_log(dataset, f"concept map failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/intelligence/{dataset}/ask")
+async def intelligence_ask(
+    request: Request,
+    dataset: str,
+    auth: bool = Depends(verify_auth),
+):
+    dataset_path = os.path.join("datasets", dataset)
+    if not os.path.isdir(dataset_path):
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    body = await request.json()
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
+
+    def sse_generator():
+        try:
+            for chunk in stream_question(dataset_path, question):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
+            intel_log(dataset, f"Q&A stream error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(sse_generator(), media_type="text/event-stream")
+
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)

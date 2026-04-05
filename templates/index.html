@@ -7,26 +7,27 @@
 </div>
 
 {% if credits %}
-<dl class="ib-credits">
+<div class="ib-stat-bar mb-4">
     <div>
-        <dt>Recharge credits</dt>
-        <dd>{{ "{:,}".format(credits.recharge_credits) }}</dd>
+        <div class="si-label">Recharge credits</div>
+        <div class="si-value">{{ "{:,}".format(credits.recharge_credits) }}</div>
     </div>
     <div>
-        <dt>Bonus credits</dt>
-        <dd>{{ "{:,}".format(credits.bonus_credits) }}</dd>
+        <div class="si-label">Bonus credits</div>
+        <div class="si-value">{{ "{:,}".format(credits.bonus_credits) }}</div>
     </div>
     <div>
-        <dt>~Tweet capacity</dt>
-        <dd>{{ "{:,}".format(credits.tweets_capacity) }}</dd>
+        <div class="si-label">~Tweet capacity</div>
+        <div class="si-value warn">{{ "{:,}".format(credits.tweets_capacity) }}</div>
     </div>
-</dl>
+</div>
 {% endif %}
 
 <div class="row g-3">
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 ib-accent-red">
             <div class="card-body">
+                <div class="ib-section-label">Collect</div>
                 <h2>Scrape</h2>
                 <p class="text-muted small mb-3">Pull tweets by year, date range, or rolling 24h window.</p>
                 <a href="/scrape" class="btn btn-primary btn-sm">New scrape</a>
@@ -35,8 +36,9 @@
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 ib-accent-dark">
             <div class="card-body">
+                <div class="ib-section-label">Explore</div>
                 <h2>Browse</h2>
                 <p class="text-muted small mb-3">Search, filter, and read through scraped tweet archives.</p>
                 <a href="/browse" class="btn btn-outline-secondary btn-sm">Open browser</a>
@@ -44,8 +46,9 @@
         </div>
     </div>
     <div class="col-md-4">
-        <div class="card h-100">
+        <div class="card h-100 ib-accent-green">
             <div class="card-body">
+                <div class="ib-section-label">Insights</div>
                 <h2>Analyze</h2>
                 <p class="text-muted small mb-3">Growth trends, hourly heatmaps, likes progression.</p>
                 <a href="/analyze" class="btn btn-outline-secondary btn-sm">Run analysis</a>
